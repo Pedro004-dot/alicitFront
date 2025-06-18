@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BidDetail, BidItem } from '../../types';
 import { formatCurrency, formatDate } from '../../utils';
 import { config } from '../../config/environment';
@@ -48,9 +49,8 @@ interface ChecklistResponse {
   error?: string;
 }
 
-
-
 const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_id }) => {
+  const navigate = useNavigate();
   const [bidDetail, setBidDetail] = useState<BidDetail | null>(null);
   const [bidItems, setBidItems] = useState<BidItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,8 +62,6 @@ const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_i
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [checklistError, setChecklistError] = useState<string | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
-
-
 
   useEffect(() => {
     if (isOpen && pncp_id) {
@@ -233,7 +231,11 @@ const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_i
     const url = `/analise-licitacao?pncp_id=${encodeURIComponent(pncp_id)}&licitacao_id=${encodeURIComponent(bidDetail?.id || '')}`;
     console.log('🌐 URL de redirecionamento:', url);
     
-    window.location.href = url;
+    // Fechar modal antes de navegar
+    onClose();
+    
+    // Usar React Router ao invés de window.location.href
+    navigate(url);
   };
 
   const getStatusColor = (status: string) => {
@@ -455,8 +457,6 @@ const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_i
       </div>
     );
   };
-
-
 
   if (!isOpen) return null;
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, FileText } from 'lucide-react';
 import { Licitacao } from '../types/licitacao';
 
@@ -15,6 +16,8 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
   onClose,
   showAnaliseButton = true
 }) => {
+  const navigate = useNavigate();
+
   // Função para determinar status baseado na data (usando status calculado do backend)
   const getStatusLicitacao = (licitacao: Licitacao) => {
     // Usar o status calculado do backend se disponível
@@ -154,7 +157,8 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                           <button
                             onClick={() => {
                               const url = `/analise-licitacao?pncp_id=${encodeURIComponent(selectedLicitacao.pncp_id)}&licitacao_id=${encodeURIComponent(selectedLicitacao.id)}`;
-                              window.location.href = url;
+                              onClose(); // Fechar modal antes de navegar
+                              navigate(url); // Usar React Router
                             }}
                             className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-slate-800 hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-all duration-200 shadow-sm"
                           >

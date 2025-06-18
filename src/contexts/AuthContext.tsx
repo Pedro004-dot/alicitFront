@@ -159,6 +159,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_KEY = 'alicit_token';
 const USER_KEY = 'alicit_user';
 const SUBSCRIPTION_KEY = 'alicit_subscription';
+const TOKEN_EXPIRES_KEY = 'alicit_token_expires'; // Nova chave para nossa própria expiração
 
 // 🏗️ Provider do Context
 interface AuthProviderProps {
@@ -170,15 +171,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // 💾 Utilitários de localStorage
   const saveToStorage = (token: string, user: User, subscription: Subscription) => {
+    // Calcular expiração de 7 dias a partir de agora
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + 7);
+    
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(subscription));
+    localStorage.setItem(TOKEN_EXPIRES_KEY, expirationDate.toISOString());
   };
 
   const clearFromStorage = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(SUBSCRIPTION_KEY);
+    localStorage.removeItem(TOKEN_EXPIRES_KEY);
   };
 
   const loadFromStorage = () => {
@@ -199,11 +206,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return null;
   };
 
-  // 🔐 Verificar se token está expirado
+  // 🔐 Verificar se token está expirado (NOSSA lógica de 7 dias)
   const isTokenExpired = (): boolean => {
     if (!state.token) return true;
     
     try {
+      // Usar nossa própria data de expiração (7 dias)
+      const expiresAtStr = localStorage.getItem(TOKEN_EXPIRES_KEY);
+      if (expiresAtStr) {
+        const expiresAt = new Date(expiresAtStr);
+        return Date.now() >= expiresAt.getTime();
+      }
+      
+      // Fallback: verificar JWT exp se nossa data não existir
       const payload = JSON.parse(atob(state.token.split('.')[1]));
       const exp = payload.exp * 1000; // JWT exp é em segundos
       return Date.now() >= exp;
@@ -442,20 +457,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const savedData = loadFromStorage();
       
-      if (savedData && !isTokenExpired()) {
-        dispatch({
-          type: 'AUTH_SUCCESS',
-          payload: {
-            user: savedData.user,
-            token: savedData.token,
-            subscription: savedData.subscription,
-          },
-        });
-      } else {
-        // Token expirado ou inexistente
-        if (savedData) {
-          clearFromStorage();
+      if (savedData) {
+        // Verificar nossa própria expiração de 7 dias
+        const expiresAtStr = localStorage.getItem(TOKEN_EXPIRES_KEY);
+        let isExpired = false;
+        
+        if (expiresAtStr) {
+          const expiresAt = new Date(expiresAtStr);
+          isExpired = Date.now() >= expiresAt.getTime();
         }
+        
+        if (!isExpired) {
+          dispatch({
+            type: 'AUTH_SUCCESS',
+            payload: {
+              user: savedData.user,
+              token: savedData.token,
+              subscription: savedData.subscription,
+            },
+          });
+        } else {
+          // Token expirado após 7 dias
+          clearFromStorage();
+          dispatch({ type: 'AUTH_CHECK_END' });
+        }
+      } else {
         dispatch({ type: 'AUTH_CHECK_END' });
       }
     };
@@ -464,23 +490,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Dependências intencionalmente vazias - queremos executar apenas uma vez
 
-  // 🔄 Verificar expiração do token periodicamente
+  // 🔄 Verificar expiração do token periodicamente (a cada 5 minutos ao invés de 1)
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
     if (state.isAuthenticated && state.token) {
       interval = setInterval(() => {
-        if (isTokenExpired()) {
-          logout();
+        // Verificar nossa própria expiração de 7 dias
+        const expiresAtStr = localStorage.getItem(TOKEN_EXPIRES_KEY);
+        if (expiresAtStr) {
+          const expiresAt = new Date(expiresAtStr);
+          if (Date.now() >= expiresAt.getTime()) {
+            logout();
+          }
         }
-      }, 60000); // Verificar a cada minuto
+      }, 300000); // Verificar a cada 5 minutos (menos agressivo)
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.isAuthenticated, state.token]); // isTokenExpired e logout são estáveis
+  }, [state.isAuthenticated, state.token]);
 
   // 📦 Value do Context
   const value: AuthContextType = {

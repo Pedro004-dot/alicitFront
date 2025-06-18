@@ -10,6 +10,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useApiData } from '../hooks/useApiData';
+import { useAuthHeaders } from '../hooks/useAuth';
 import { Match, Bid } from '../types';
 import { config } from '../config/environment';
 
@@ -73,6 +74,7 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
   const { matches, companies, loading } = useApiData();
+  const { getHeaders } = useAuthHeaders();
   
   // Estados para métricas
   const [activeBids, setActiveBids] = useState<number>(0);
@@ -103,12 +105,15 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
     fetchActiveBids();
   }, []);
 
-  // Buscar matches recentes
+  // Buscar matches recentes (APENAS DO USUÁRIO LOGADO)
   useEffect(() => {
     const fetchRecentMatches = async () => {
       try {
         setLoadingRecentMatches(true);
-        const response = await fetch(`${config.API_BASE_URL}/matches/recent?limit=5`);
+        // Usar a rota que filtra por usuário logado e incluir headers de autenticação
+        const response = await fetch(`${config.API_BASE_URL}/matches?limit=5`, {
+          headers: getHeaders()
+        });
         const result = await response.json();
         
         if (result.success) {
@@ -123,7 +128,7 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
     };
 
     fetchRecentMatches();
-  }, []);
+  }, [getHeaders]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
