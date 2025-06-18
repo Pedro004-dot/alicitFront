@@ -12,7 +12,6 @@ import {
 import { useApiData } from '../hooks/useApiData';
 import { Match, Bid } from '../types';
 import { config } from '../config/environment';
-import { useAuthContext } from '../contexts/AuthContext';
 
 interface MetricCardProps {
   title: string;
@@ -74,7 +73,6 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
   const { matches, companies, loading } = useApiData();
-  const { getAuthHeaders } = useAuthContext();
   
   // Estados para métricas
   const [activeBids, setActiveBids] = useState<number>(0);
@@ -105,14 +103,12 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
     fetchActiveBids();
   }, []);
 
-  // Buscar matches recentes (apenas do usuário)
+  // Buscar matches recentes
   useEffect(() => {
     const fetchRecentMatches = async () => {
       try {
         setLoadingRecentMatches(true);
-        const response = await fetch(`${config.API_BASE_URL}/matches?limit=5`, {
-          headers: getAuthHeaders(),
-        });
+        const response = await fetch(`${config.API_BASE_URL}/matches/recent?limit=5`);
         const result = await response.json();
         
         if (result.success) {
@@ -127,7 +123,7 @@ const HomePage: React.FC<HomePageProps> = ({ onPageChange }) => {
     };
 
     fetchRecentMatches();
-  }, [getAuthHeaders]);
+  }, []);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
