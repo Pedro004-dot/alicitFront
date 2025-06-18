@@ -83,7 +83,6 @@ const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_i
   // Iniciar análise automaticamente quando os dados da licitação forem carregados
   useEffect(() => {
     if (bidDetail?.id && !checklist && analysisStatus === 'idle') {
-      console.log('🎯 Modal aberto - iniciando análise automática da licitação:', bidDetail.id);
       iniciarAnaliseSequencial();
     }
   }, [bidDetail, checklist, analysisStatus]);

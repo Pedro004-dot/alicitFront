@@ -55,7 +55,6 @@ export const useApiData = (): ApiDataHook => {
       setLoading('bids', true);
       // Remover limitador - buscar todas as licitações
       const url = `${API_BASE_URL}/bids?limit=0`; // limit=0 significa sem limite
-      console.log('🔗 [BIDS] Requisição para:', url);
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -66,13 +65,10 @@ export const useApiData = (): ApiDataHook => {
       
       if (result.success && result.data) {
         setBids(result.data);
-        console.log(`✅ ${result.data.length} licitações carregadas (todas)`);
       } else {
-        console.error('Erro na resposta da API:', result.message || result.error);
         setBids([]);
       }
     } catch (error) {
-      console.error('Erro ao carregar licitações:', error);
       setBids([]);
     } finally {
       setLoading('bids', false);
@@ -86,13 +82,11 @@ export const useApiData = (): ApiDataHook => {
       
       // Verificar se tem token válido
       if (!hasValidToken) {
-        console.warn('⚠️ Token inválido para carregar empresas');
         setCompanies([]);
         return;
       }
 
       const url = `${API_BASE_URL}/companies`;
-      console.log('🔗 [COMPANIES] Requisição para:', url);
       const response = await fetch(url, {
         headers: getHeaders(),
       });
@@ -105,13 +99,10 @@ export const useApiData = (): ApiDataHook => {
       
       if (result.success && result.data) {
         setCompanies(result.data);
-        console.log(`✅ ${result.data.length} empresas carregadas (multi-tenant)`);
       } else {
-        console.error('Erro na resposta da API:', result.message || result.error);
         setCompanies([]);
       }
     } catch (error) {
-      console.error('Erro ao carregar empresas:', error);
       setCompanies([]);
     } finally {
       setLoading('companies', false);
@@ -126,7 +117,6 @@ export const useApiData = (): ApiDataHook => {
       
       // Verificar se tem token válido
       if (!hasValidToken) {
-        console.warn('⚠️ Token inválido para carregar matches');
         setMatches([]);
         setCompanyMatches([]);
         return;
@@ -140,7 +130,6 @@ export const useApiData = (): ApiDataHook => {
         const matchesResult: ApiResponse<Match[]> = await matchesResponse.json();
         if (matchesResult.success && matchesResult.data) {
           setMatches(matchesResult.data);
-          console.log(`✅ ${matchesResult.data.length} matches carregados (multi-tenant)`);
         }
       }
       
@@ -152,12 +141,10 @@ export const useApiData = (): ApiDataHook => {
         const companyMatchesResult: ApiResponse<CompanyMatch[]> = await companyMatchesResponse.json();
         if (companyMatchesResult.success && companyMatchesResult.data) {
           setCompanyMatches(companyMatchesResult.data);
-          console.log(`✅ ${companyMatchesResult.data.length} matches por empresa carregados (multi-tenant)`);
         }
       }
       
     } catch (error) {
-      console.error('Erro ao carregar matches:', error);
       setMatches([]);
       setCompanyMatches([]);
     } finally {
@@ -203,15 +190,9 @@ export const useApiData = (): ApiDataHook => {
               } : null
             }
           });
-          
-          console.log('📊 Status atualizado:', {
-            daily_running: dailyStatus.running,
-            reevaluate_running: reevaluateStatus.running
-          });
         }
       }
     } catch (error) {
-      console.error('Erro ao carregar status:', error);
     } finally {
       setLoading('status', false);
     }
@@ -222,18 +203,15 @@ export const useApiData = (): ApiDataHook => {
     const loadInitialData = async () => {
       // Só carregar se tiver token válido
       if (!hasValidToken) {
-        console.log('⚠️ Usuário não autenticado - dados não serão carregados');
         return;
       }
 
-      console.log('🚀 Carregando dados iniciais (usuário autenticado)...');
       await Promise.all([
         loadBids(), // Licitações permanecem públicas
         loadCompanies(), // Empresas agora são multi-tenant
         loadMatches(), // Matches agora são multi-tenant
         loadStatus() // Status permanece público
       ]);
-      console.log('✅ Dados iniciais carregados');
     };
 
     loadInitialData();

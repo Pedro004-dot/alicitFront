@@ -23,13 +23,11 @@ const DashboardPage: React.FC = () => {
 
   // Função para refresh manual de todos os dados
   const handleRefreshData = async () => {
-    console.log('🔄 Atualizando todos os dados...');
     await Promise.all([
       loadBids(),
       loadCompanies(),
       loadMatches()
     ]);
-    console.log('✅ Dados atualizados');
   };
 
   // Calcular estatísticas

@@ -18,7 +18,7 @@ interface UseAuthReturn {
   verifyEmail: (code: string, email: string) => Promise<boolean>;
   resendVerification: (email: string) => Promise<boolean>;
 }
-
+//interface de contexto
 interface AuthContextData extends UseAuthReturn {}
 
 // Contexto

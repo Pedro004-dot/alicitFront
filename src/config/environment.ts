@@ -15,20 +15,11 @@ export const config = {
     const envUrl = process.env.REACT_APP_API_BASE_URL;
     const fallbackUrl = 'https://alicitsaas-production.up.railway.app/api/';
 
-    // Debug: Log das variáveis de ambiente
-    console.log('🔍 Debug Environment:', {
-      envUrl,
-      processEnv: process.env.REACT_APP_API_BASE_URL,
-      fallbackUrl,
-    });
-
     // Se há variável de ambiente, usa como está
     if (envUrl) {
-      console.log('✅ Usando URL do .env:', envUrl);
       return envUrl;
     }
     
-    console.log('⚠️ Usando URL fallback:', fallbackUrl);
     return fallbackUrl;
   })(),
   

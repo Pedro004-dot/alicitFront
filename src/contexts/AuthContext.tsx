@@ -231,7 +231,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'AUTH_START' });
 
       const loginUrl = `${config.API_BASE_URL}/auth/login`;
-      console.log('🔗 Fazendo requisição para:', loginUrl);
 
       const response = await fetch(loginUrl, {
         method: 'POST',
@@ -259,7 +258,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           },
         });
 
-        console.log('✅ Login realizado com sucesso:', user.name);
         return true;
       } else {
         const errorMsg = result.error || result.message || 'Erro desconhecido';
@@ -267,7 +265,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
     } catch (error) {
-      console.error('❌ Erro no login:', error);
       dispatch({ type: 'AUTH_ERROR', payload: 'Erro de conexão. Tente novamente.' });
       return false;
     }
@@ -279,7 +276,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'AUTH_START' });
 
       const registerUrl = `${config.API_BASE_URL}/auth/register`;
-      console.log('🔗 Fazendo requisição para:', registerUrl);
 
       const response = await fetch(registerUrl, {
         method: 'POST',
@@ -300,7 +296,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
     } catch (error: any) {
-      console.error('❌ Erro na requisição de registro:', error);
       dispatch({ type: 'AUTH_ERROR', payload: error.message || 'Erro de rede ou servidor indisponível.' });
       return false;
     }
@@ -312,7 +307,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'AUTH_START' });
 
       const verifyUrl = `${config.API_BASE_URL}/auth/verify-email`;
-      console.log('🔗 Fazendo requisição para:', verifyUrl);
 
       const response = await fetch(verifyUrl, {
         method: 'POST',
@@ -330,7 +324,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
     } catch (error: any) {
-      console.error('❌ Erro na requisição de verificação:', error);
       dispatch({ type: 'AUTH_ERROR', payload: error.message || 'Erro de rede ou servidor indisponível.' });
       return false;
     }
@@ -342,7 +335,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'AUTH_START' });
 
       const resendUrl = `${config.API_BASE_URL}/auth/resend-verification`;
-      console.log('🔗 Fazendo requisição para:', resendUrl);
 
       const response = await fetch(resendUrl, {
         method: 'POST',
@@ -360,7 +352,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
     } catch (error: any) {
-      console.error('❌ Erro na requisição de reenvio:', error);
       dispatch({ type: 'AUTH_ERROR', payload: error.message || 'Erro de rede ou servidor indisponível.' });
       return false;
     }
@@ -437,7 +428,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback(() => {
     clearFromStorage();
     dispatch({ type: 'AUTH_LOGOUT' });
-    console.log('👋 Logout realizado');
   }, []);
 
   // 🧹 Limpar erro
@@ -461,11 +451,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             subscription: savedData.subscription,
           },
         });
-        console.log('✅ Usuário autenticado automaticamente:', savedData.user.name);
       } else {
         // Token expirado ou inexistente
         if (savedData) {
-          console.log('⏰ Token expirado, fazendo logout');
           clearFromStorage();
         }
         dispatch({ type: 'AUTH_CHECK_END' });
@@ -483,7 +471,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (state.isAuthenticated && state.token) {
       interval = setInterval(() => {
         if (isTokenExpired()) {
-          console.log('⏰ Token expirou, fazendo logout automático');
           logout();
         }
       }, 60000); // Verificar a cada minuto

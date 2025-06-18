@@ -107,7 +107,6 @@ const CompaniesPage: React.FC = () => {
         return;
       }
       
-      console.log('🔗 [COMPANIES] Requisição para:', `${config.API_BASE_URL}/companies/`);
       const response = await fetch(`${config.API_BASE_URL}/companies/`, {
         headers: getHeaders()
       });
@@ -115,10 +114,7 @@ const CompaniesPage: React.FC = () => {
       
       if (response.ok && result.success && result.data) {
         setCompanies(result.data);
-        console.log(`✅ ${result.data.length} empresas carregadas (multi-tenant)`);
       } else {
-        console.error('Erro na resposta da API:', result.message);
-        setCompanies([]);
         if (response.status === 401) {
           showNotification('error', 'Sessão expirada. Faça login novamente.');
         } else {
@@ -126,7 +122,6 @@ const CompaniesPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Erro ao carregar empresas:', error);
       setCompanies([]);
       showNotification('error', 'Erro ao conectar com a API');
     } finally {

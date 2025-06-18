@@ -25,9 +25,6 @@ const StatusDebug: React.FC = () => {
       const searchData = await searchRes.json();
       const reevalData = await reevalRes.json();
 
-      console.log('Status Debug - Search:', searchData);
-      console.log('Status Debug - Reeval:', reevalData);
-
       if (searchData.status === 'success') {
         setSearchStatus(searchData.data);
       }
