@@ -13,7 +13,7 @@ export const config = {
   // URL base da API
   API_BASE_URL: (() => {
     const envUrl = process.env.REACT_APP_API_BASE_URL;
-    const fallbackUrl = 'http://localhost:5002/api';
+    const fallbackUrl = 'https://alicitsaas-production.up.railway.app/api/';
 
     // Debug: Log das variáveis de ambiente
     console.log('🔍 Debug Environment:', {
