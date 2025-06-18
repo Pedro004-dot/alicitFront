@@ -8,7 +8,7 @@ declare const process: {
     REACT_APP_VERSION?: string;
   };
 };
-
+//rota de api
 export const config = {
   // URL base da API
   API_BASE_URL: (() => {
