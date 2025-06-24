@@ -24,9 +24,10 @@ const BidAnalysisPage: React.FC = () => {
   // Extrair parâmetros da URL
   const urlParams = new URLSearchParams(window.location.search);
   const pncp_id = urlParams.get('pncp_id');
-  const licitacao_id = urlParams.get('licitacao_id');
+  const licitacao_id_url = urlParams.get('licitacao_id');
   
   const [bidDetail, setBidDetail] = useState<BidDetail | null>(null);
+  const [currentLicitacaoId, setCurrentLicitacaoId] = useState<string | null>(licitacao_id_url);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -71,10 +72,10 @@ const BidAnalysisPage: React.FC = () => {
   }, [chatMessages]);
 
   useEffect(() => {
-    if (licitacao_id) {
+    if (currentLicitacaoId) {
       fetchDocuments();
     }
-  }, [licitacao_id]);
+  }, [currentLicitacaoId]);
 
   const fetchBidDetail = async () => {
     if (!pncp_id) return;
@@ -89,6 +90,24 @@ const BidAnalysisPage: React.FC = () => {
       }
       const data = await response.json();
       setBidDetail(data.data);
+      
+      // 🎯 CORREÇÃO: Debug completo e usar o UUID correto
+      console.log('📋 Debug bidDetail completo:', data.data);
+      console.log('🔍 currentLicitacaoId atual:', currentLicitacaoId);
+      console.log('🔍 data.data.id:', data.data?.id);
+      console.log('🔍 data.data.licitacao_id:', data.data?.licitacao_id);
+      
+      // Se não temos licitacao_id da URL, extrair do detalhe
+      if (!currentLicitacaoId) {
+        // Tentar diferentes campos que podem conter o UUID
+        const uuid = data.data?.licitacao_id || data.data?.id;
+        if (uuid) {
+          console.log('🔄 Licitacao_id obtido do detalhe:', uuid);
+          setCurrentLicitacaoId(uuid);
+        } else {
+          console.error('❌ Nenhum licitacao_id encontrado no bidDetail');
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
@@ -101,14 +120,14 @@ const BidAnalysisPage: React.FC = () => {
     setDocumentsError(null);
     
     try {
-      if (!licitacao_id) {
+      if (!currentLicitacaoId) {
         console.warn('⚠️ licitacao_id não disponível para buscar documentos');
         setDocumentsLoading(false);
         return;
       }
       
-      console.log('🔍 Buscando documentos para licitacao_id:', licitacao_id);
-      const res = await fetch(`${config.API_BASE_URL}/bids/documents?licitacao_id=${licitacao_id}`);
+      console.log('🔍 Buscando documentos para licitacao_id:', currentLicitacaoId);
+      const res = await fetch(`${config.API_BASE_URL}/bids/documents?licitacao_id=${currentLicitacaoId}`);
       
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -142,7 +161,19 @@ const BidAnalysisPage: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!currentMessage.trim() || !licitacao_id) return;
+    if (!currentMessage.trim()) return;
+    
+    // ✅ Validar licitacao_id
+    if (!currentLicitacaoId || currentLicitacaoId === 'undefined' || currentLicitacaoId === 'null') {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        type: 'assistant',
+        content: '❌ Erro: ID da licitação não está disponível. Verifique se você acessou esta página a partir de uma licitação válida.',
+        timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+      return;
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -168,7 +199,7 @@ const BidAnalysisPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          licitacao_id: licitacao_id,
+          licitacao_id: currentLicitacaoId,
           query: currentMessage.trim()
         })
       });

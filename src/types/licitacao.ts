@@ -13,6 +13,7 @@ export interface Licitacao {
   pncp_id: string;
   objeto_compra: string;
   uf: string;
+  data_abertura_proposta: string | null;
   data_encerramento_proposta: string | null;
   valor_total_estimado: number;
   status: string;
@@ -23,6 +24,7 @@ export interface Licitacao {
   orgao_entidade: any;
   unidade_orgao: any;
   informacao_complementar: string;
+  numero_controle_pncp?: string; // Novo campo para buscar itens
   itens?: LicitacaoItem[];
   // Campos calculados do backend
   status_calculado?: string;

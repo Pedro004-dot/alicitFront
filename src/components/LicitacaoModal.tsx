@@ -1,7 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, FileText } from 'lucide-react';
+import { X, Package, Loader2, RefreshCw } from 'lucide-react';
 import { Licitacao } from '../types/licitacao';
+import { config } from '../config/environment';
+import { useAuthHeaders } from '../hooks/useAuth';
+
+interface LicitacaoItem {
+  numero_item: number;
+  descricao: string;
+  quantidade?: number;
+  unidade_medida?: string;
+  valor_unitario_estimado?: number;
+  valor_total?: number;
+  material_ou_servico?: string;
+  criterio_julgamento_nome?: string;
+  situacao_item?: string;
+  especificacao_tecnica?: string;
+}
 
 interface LicitacaoModalProps {
   selectedLicitacao: Licitacao | null;
@@ -17,6 +32,11 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
   showAnaliseButton = true
 }) => {
   const navigate = useNavigate();
+  const [itens, setItens] = useState<LicitacaoItem[]>([]);
+  const [loadingItens, setLoadingItens] = useState(false);
+  const [itensError, setItensError] = useState<string | null>(null);
+  const [showAllItens, setShowAllItens] = useState(false);
+  const authHeaders = useAuthHeaders();
 
   // Função para determinar status baseado na data (usando status calculado do backend)
   const getStatusLicitacao = (licitacao: Licitacao) => {
@@ -65,22 +85,79 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
     }).format(licitacao.valor_total_estimado);
   };
 
-  // Função auxiliar para formatar valores numéricos simples (para itens)
-  const formatarValorNumerico = (valor: number) => {
-    if (!valor || valor === 0) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(valor);
-  };
-
   // Função para formatar data
   const formatarData = (data: string | null) => {
     if (!data) return 'Não informado';
     return new Date(data).toLocaleDateString('pt-BR');
   };
 
+  // Buscar itens quando o modal abrir e tiver uma licitação
+  useEffect(() => {
+    if (selectedLicitacao) {
+      // Usar numero_controle_pncp se disponível, senão usar pncp_id
+      const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
+      if (pncpId) {
+        fetchItens(pncpId);
+      } else {
+        setItens([]);
+        setItensError('ID PNCP não disponível para buscar itens');
+      }
+    } else {
+      // Limpar itens quando modal fechar
+      setItens([]);
+      setItensError(null);
+    }
+  }, [selectedLicitacao]);
+
+  const fetchItens = async (pncpId: string, forceRefresh = false) => {
+    setLoadingItens(true);
+    setItensError(null);
+    
+    try {
+      const endpoint = forceRefresh 
+        ? `${config.API_BASE_URL}/pncp/licitacao/${pncpId}/itens/refresh`
+        : `${config.API_BASE_URL}/pncp/licitacao/${pncpId}/itens`;
+      
+      const method = forceRefresh ? 'POST' : 'GET';
+      
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders.getHeaders()
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.data?.itens) {
+        setItens(data.data.itens);
+        console.log(`✅ ${data.data.itens.length} itens carregados (fonte: ${data.data.fonte})`);
+      } else {
+        setItens([]);
+        setItensError(data.message || 'Nenhum item encontrado');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar itens:', error);
+      setItensError(error instanceof Error ? error.message : 'Erro ao carregar itens');
+      setItens([]);
+    } finally {
+      setLoadingItens(false);
+    }
+  };
+
   if (!selectedLicitacao) return null;
+
+  // 🔍 DEBUG: Log completo do objeto selectedLicitacao
+  console.log('🔍 [LicitacaoModal] selectedLicitacao completo:', selectedLicitacao);
+  console.log('🔍 [LicitacaoModal] razao_social:', selectedLicitacao.razao_social);
+  console.log('🔍 [LicitacaoModal] nome_unidade:', selectedLicitacao.nome_unidade);
+  console.log('🔍 [LicitacaoModal] municipio_nome:', selectedLicitacao.municipio_nome);
+  console.log('🔍 [LicitacaoModal] uf_nome:', selectedLicitacao.uf_nome);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -129,6 +206,10 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                     <p className="text-sm text-gray-900">{formatarData(selectedLicitacao.data_publicacao)}</p>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-700">Data de Abertura</label>
+                    <p className="text-sm text-gray-900">{formatarData(selectedLicitacao.data_abertura_proposta)}</p>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700">Data de Encerramento</label>
                     <p className="text-sm text-gray-900">{formatarData(selectedLicitacao.data_encerramento_proposta)}</p>
                   </div>
@@ -156,7 +237,14 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                         <div>
                           <button
                             onClick={() => {
-                              const url = `/analise-licitacao?pncp_id=${encodeURIComponent(selectedLicitacao.pncp_id)}&licitacao_id=${encodeURIComponent(selectedLicitacao.id)}`;
+                              console.log('🔍 Debug - selectedLicitacao.id:', selectedLicitacao.id);
+                              console.log('🔍 Debug - selectedLicitacao.pncp_id:', selectedLicitacao.pncp_id);
+                              
+                              // 🎯 CORREÇÃO: Verificar se temos o ID interno, senão passar apenas pncp_id
+                              const licitacaoId = selectedLicitacao.id || '';
+                              const url = `/analise-licitacao?pncp_id=${encodeURIComponent(selectedLicitacao.pncp_id)}&licitacao_id=${encodeURIComponent(licitacaoId)}`;
+                              
+                              console.log('🔗 Navegando para:', url);
                               onClose(); // Fechar modal antes de navegar
                               navigate(url); // Usar React Router
                             }}
@@ -188,54 +276,175 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                 </div>
               )}
 
-              {/* Itens */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">
-                  Itens da Licitação ({selectedLicitacao.itens?.length || 0})
+
+            </div>
+          )}
+
+          {/* Seção de Itens da Licitação */}
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Package className="h-5 w-5 text-indigo-600" />
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Itens da Licitação
                 </h3>
-                
-                {selectedLicitacao.itens && selectedLicitacao.itens.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unidade</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor Unit.</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {selectedLicitacao.itens.map((item, index) => {
-                          const valorUnitario = parseFloat(item.valor_unitario_estimado) || 0;
-                          const quantidade = parseFloat(item.quantidade) || 0;
-                          const valorTotal = valorUnitario * quantidade;
-                          
-                          return (
-                            <tr key={index} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm text-gray-900">{item.numero_item}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{item.descricao}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{quantidade}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{item.unidade_medida}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{formatarValorNumerico(valorUnitario)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900 font-medium">{formatarValorNumerico(valorTotal)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                {itens.length > 0 && (
+                  <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                    {itens.length} {itens.length === 1 ? 'item' : 'itens'}
+                  </span>
+                )}
+              </div>
+              
+              {(selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id) && (
+                <button
+                  onClick={() => {
+                    const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
+                    if (pncpId) fetchItens(pncpId, true);
+                  }}
+                  disabled={loadingItens}
+                  className="flex items-center space-x-1 px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                  title="Atualizar itens da API PNCP"
+                >
+                  {loadingItens ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span>Atualizar</span>
+                </button>
+              )}
+            </div>
+
+            {/* Loading de Itens */}
+            {loadingItens && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-600 mr-2" />
+                <span className="text-gray-600">Carregando itens...</span>
+              </div>
+            )}
+
+            {/* Erro ao carregar itens */}
+            {itensError && !loadingItens && (
+              <div className="text-center py-8">
+                <p className="text-red-600 mb-2">{itensError}</p>
+                {(selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id) && (
+                  <button
+                    onClick={() => {
+                      const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
+                      if (pncpId) fetchItens(pncpId);
+                    }}
+                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                  >
+                    Tentar novamente
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Lista de Itens */}
+            {!loadingItens && !itensError && itens.length > 0 && (
+              <div className="space-y-3">
+                {(showAllItens ? itens : itens.slice(0, 5)).map((item, index) => (
+                  <div key={`item-detail-${item.numero_item || index}`} className="bg-white p-4 rounded-lg border border-gray-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
+                            Item {item.numero_item}
+                          </span>
+                          {item.material_ou_servico && (
+                            <span className={`text-xs font-medium px-2 py-1 rounded ${
+                              item.material_ou_servico === 'M' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-purple-100 text-purple-800'
+                            }`}>
+                              {item.material_ou_servico === 'M' ? 'Material' : 'Serviço'}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-semibold text-gray-900 mb-1">
+                          {item.descricao}
+                        </h4>
+                        {item.especificacao_tecnica && (
+                          <p className="text-sm text-gray-600 mb-2">
+                            {item.especificacao_tecnica}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      {item.quantidade && (
+                        <div>
+                          <span className="text-gray-500">Quantidade:</span>
+                          <div className="font-medium">
+                            {item.quantidade.toLocaleString('pt-BR')} {item.unidade_medida || ''}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {item.valor_unitario_estimado && (
+                        <div>
+                          <span className="text-gray-500">Valor Unitário:</span>
+                          <div className="font-medium text-green-600">
+                            R$ {item.valor_unitario_estimado.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {item.valor_total && (
+                        <div>
+                          <span className="text-gray-500">Valor Total:</span>
+                          <div className="font-semibold text-green-700">
+                            R$ {item.valor_total.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {item.criterio_julgamento_nome && (
+                        <div>
+                          <span className="text-gray-500">Julgamento:</span>
+                          <div className="font-medium">{item.criterio_julgamento_nome}</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 bg-gray-50 rounded-lg">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500">Nenhum item encontrado para esta licitação</p>
+                ))}
+
+                {/* Botão para mostrar mais itens */}
+                {itens.length > 5 && (
+                  <div className="text-center pt-4">
+                    <button
+                      onClick={() => setShowAllItens(!showAllItens)}
+                      className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
+                    >
+                      {showAllItens 
+                        ? 'Mostrar menos itens' 
+                        : `Mostrar todos os ${itens.length} itens`
+                      }
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Caso não tenha itens */}
+            {!loadingItens && !itensError && itens.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>Nenhum item encontrado para esta licitação</p>
+                <p className="text-sm mt-1">
+                  Os itens podem não estar disponíveis na API do PNCP
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

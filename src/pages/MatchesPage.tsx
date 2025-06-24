@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Building, FileText, Eye, X, MapPin, DollarSign, ArrowLeft, Users, Award, Target, Search, RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Building, FileText, Eye, MapPin, DollarSign, ArrowLeft, Users, Award, Target } from 'lucide-react';
 import { config } from '../config/environment';
 import LicitacaoModal from '../components/LicitacaoModal';
+import ProcessStatusWidget from '../components/ProcessStatusWidget';
 import { Licitacao } from '../types/licitacao';
 import { useAuthHeaders } from '../hooks/useAuth';
 
@@ -31,6 +32,7 @@ interface Match {
   licitacao_valor: string;
   licitacao_data_publicacao: string | null;
   licitacao_modalidade: string | null;
+  licitacao_status?: string;
 }
 
 const MatchesPage: React.FC = () => {
@@ -45,237 +47,13 @@ const MatchesPage: React.FC = () => {
   const [modalLoading, setModalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Estados para os botões de match
-  const [searchingNewBids, setSearchingNewBids] = useState(false);
-  const [reevaluatingBids, setReevaluatingBids] = useState(false);
-
-
-  const [processStatus, setProcessStatus] = useState<{
-    search: { running: boolean; message: string; };
-    reevaluate: { running: boolean; message: string; };
-  }>({
-    search: { running: false, message: '' },
-    reevaluate: { running: false, message: '' }
-  });
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error' | 'info';
-    message: string;
-    visible: boolean;
-  }>({ type: 'info', message: '', visible: false });
-
-  // Função para mostrar notificação
-  const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
-    setNotification({ type, message, visible: true });
+  // Callback para quando um processo é concluído
+  const handleProcessComplete = (type: 'search' | 'reevaluate') => {
+    console.log(`Processo ${type} concluído, recarregando dados...`);
+    // Recarregar dados após 2 segundos
     setTimeout(() => {
-      setNotification(prev => ({ ...prev, visible: false }));
-    }, 5000);
-  };
-
-  // Polling de status dos processos
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (searchingNewBids || reevaluatingBids) {
-      console.log('Iniciando polling de status...', { searchingNewBids, reevaluatingBids });
-      
-      interval = setInterval(async () => {
-        try {
-          // Verificar status da busca
-          if (searchingNewBids) {
-            console.log('Verificando status da busca...');
-            const searchResponse = await fetch(`${config.API_BASE_URL}/status/daily-bids`, {
-              headers: getHeaders(),
-            });
-            const searchData = await searchResponse.json();
-            
-            console.log('Status da busca:', searchData);
-            
-            if (searchData.status === 'success' && searchData.data) {
-              const isRunning = searchData.data.running === true;
-              const message = searchData.data.message || '';
-              
-              setProcessStatus(prev => ({
-                ...prev,
-                search: {
-                  running: isRunning,
-                  message: message
-                }
-              }));
-              
-              // Se não está mais rodando, finalizar
-              if (!isRunning && searchingNewBids) {
-                console.log('Busca concluída, finalizando...');
-                setSearchingNewBids(false);
-                showNotification('success', 'Busca de novas licitações concluída! Recarregando dados...');
-                // Recarregar dados após 2 segundos
-                setTimeout(() => {
-                  window.location.reload();
-                }, 2000);
-              }
-            }
-          }
-          
-          // Verificar status da reavaliação
-          if (reevaluatingBids) {
-            console.log('Verificando status da reavaliação...');
-            const reevalResponse = await fetch(`${config.API_BASE_URL}/status/reevaluate`, {
-              headers: getHeaders(),
-            });
-            const reevalData = await reevalResponse.json();
-            
-            console.log('Status da reavaliação:', reevalData);
-            
-            if (reevalData.status === 'success' && reevalData.data) {
-              const isRunning = reevalData.data.running === true;
-              const message = reevalData.data.message || '';
-              
-              setProcessStatus(prev => ({
-                ...prev,
-                reevaluate: {
-                  running: isRunning,
-                  message: message
-                }
-              }));
-              
-              // Se não está mais rodando, finalizar
-              if (!isRunning && reevaluatingBids) {
-                console.log('Reavaliação concluída, finalizando...');
-                setReevaluatingBids(false);
-                showNotification('success', 'Reavaliação de matches concluída! Recarregando dados...');
-                // Recarregar dados após 2 segundos
-                setTimeout(() => {
-                  window.location.reload();
-                }, 2000);
-              }
-            }
-          }
-          
-        } catch (err) {
-          console.error('Erro ao verificar status dos processos:', err);
-          // Em caso de erro, parar os processos para evitar loop infinito
-          if (searchingNewBids) {
-            setSearchingNewBids(false);
-            showNotification('error', 'Erro ao verificar status da busca');
-          }
-          if (reevaluatingBids) {
-            setReevaluatingBids(false);
-            showNotification('error', 'Erro ao verificar status da reavaliação');
-          }
-        }
-      }, 2000); // Reduzir para 2 segundos para ser mais responsivo
-    }
-    
-    return () => {
-      if (interval) {
-        console.log('Limpando interval de polling');
-        clearInterval(interval);
-      }
-    };
-  }, [searchingNewBids, reevaluatingBids]);
-
-  // Função para buscar novas licitações
-  const handleSearchNewBids = async () => {
-    if (searchingNewBids || reevaluatingBids) {
-      console.log('Processo já em andamento, ignorando clique');
-      return;
-    }
-
-    try {
-      console.log('Iniciando busca de novas licitações...');
-      setSearchingNewBids(true);
-      setProcessStatus(prev => ({
-        ...prev,
-        search: { running: true, message: 'Iniciando busca de novas licitações...' }
-      }));
-      
-      const response = await fetch(`${config.API_BASE_URL}/search-new-bids`, {
-        method: 'POST',
-        headers: {
-          ...getHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      
-      const data = await response.json();
-      console.log('Resposta da API de busca:', data);
-      
-      if (data.status === 'success' && data.data.success) {
-        showNotification('info', `Busca iniciada! ${data.data.estimated_duration || 'Processo em andamento...'}`);
-      } else {
-        throw new Error(data.data?.message || data.message || 'Erro ao iniciar busca');
-      }
-      
-    } catch (err) {
-      console.error('Erro ao iniciar busca:', err);
-      setSearchingNewBids(false);
-      setProcessStatus(prev => ({
-        ...prev,
-        search: { running: false, message: '' }
-      }));
-      showNotification('error', err instanceof Error ? err.message : 'Erro ao iniciar busca de licitações');
-    }
-  };
-
-  // Função para reavaliar matches
-  const handleReevaluateBids = async () => {
-    if (reevaluatingBids || searchingNewBids) {
-      console.log('Processo já em andamento, ignorando clique');
-      return;
-    }
-
-    try {
-      console.log('Iniciando reavaliação de matches...');
-      setReevaluatingBids(true);
-      setProcessStatus(prev => ({
-        ...prev,
-        reevaluate: { running: true, message: 'Iniciando reavaliação de matches...' }
-      }));
-      
-      const response = await fetch(`${config.API_BASE_URL}/reevaluate-bids`, {
-        method: 'POST',
-        headers: {
-          ...getHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      
-      const data = await response.json();
-      console.log('Resposta da API de reavaliação:', data);
-      
-      if (data.status === 'success' && data.data.success) {
-        showNotification('info', `Reavaliação iniciada! ${data.data.estimated_duration || 'Processo em andamento...'}`);
-      } else {
-        throw new Error(data.data?.message || data.message || 'Erro ao iniciar reavaliação');
-      }
-      
-    } catch (err) {
-      console.error('Erro ao iniciar reavaliação:', err);
-      setReevaluatingBids(false);
-      setProcessStatus(prev => ({
-        ...prev,
-        reevaluate: { running: false, message: '' }
-      }));
-      showNotification('error', err instanceof Error ? err.message : 'Erro ao iniciar reavaliação de matches');
-    }
-  };
-
-  // Função para parar processo manualmente
-  const handleStopProcess = () => {
-    console.log('Parando processos manualmente...');
-    if (searchingNewBids) {
-      setSearchingNewBids(false);
-      showNotification('info', 'Busca de licitações interrompida pelo usuário');
-    }
-    if (reevaluatingBids) {
-      setReevaluatingBids(false);
-      showNotification('info', 'Reavaliação de matches interrompida pelo usuário');
-    }
-    setProcessStatus({
-      search: { running: false, message: '' },
-      reevaluate: { running: false, message: '' }
-    });
+      window.location.reload();
+    }, 2000);
   };
 
   // Carregar empresas com matches
@@ -396,65 +174,86 @@ const MatchesPage: React.FC = () => {
 
   // Abrir modal com detalhes da licitação (seguindo padrão do SearchPage)
   const abrirModal = async (match: Match) => {
-    // Primeiro criar um objeto básico e definir no estado (para o modal abrir)
-    const licitacaoBasica: Licitacao = {
-      id: match.licitacao_id,
-      pncp_id: match.licitacao_pncp_id || match.licitacao_id,
-      objeto_compra: match.licitacao_objeto,
-      uf: match.licitacao_uf || '',
-      data_encerramento_proposta: null,
-      valor_total_estimado: parseFloat(match.licitacao_valor) || 0,
-      status: 'Ativa',
-      data_publicacao: match.licitacao_data_publicacao,
-      modalidade_nome: match.licitacao_modalidade || '',
-      situacao_compra_nome: '',
-      processo: '',
-      orgao_entidade: null,
-      unidade_orgao: null,
-      informacao_complementar: 'Dados básicos da licitação obtidos através do match.',
-      itens: []
-    };
-
-    setSelectedLicitacao(licitacaoBasica);
+    // 🎯 CORREÇÃO: Buscar detalhes completos da API em vez de criar objeto básico
     setModalLoading(true);
 
     try {
-      // Primeiro buscar o pncp_id correto usando o licitacao_id
-      const bidResponse = await fetch(`${config.API_BASE_URL}/bids/`, {
-        headers: getHeaders(),
-      });
-      const bidData = await bidResponse.json();
+      // 🔧 CORREÇÃO: Usar licitacao_objeto para extrair pncp_id se necessário
+      const pncp_id = match.licitacao_pncp_id || match.licitacao_id;
+      console.log('🔍 [MatchesPage] Buscando detalhes para pncp_id:', pncp_id);
+      console.log('🔍 [MatchesPage] match completo:', match);
       
-      let realPncpId = match.licitacao_pncp_id || match.licitacao_id;
+      // Buscar detalhes completos via API
+      const response = await fetch(`${config.API_BASE_URL}/bids/detail?pncp_id=${encodeURIComponent(pncp_id)}`);
       
-      if (bidData.success) {
-        const licitacao = bidData.data.find((l: any) => l.id === match.licitacao_id);
-        if (licitacao && licitacao.pncp_id) {
-          realPncpId = licitacao.pncp_id;
-        }
+      if (!response.ok) {
+        throw new Error('Falha ao carregar detalhes da licitação');
       }
-
-      // Agora tentar buscar detalhes completos com o pncp_id correto
-      const [detailsResponse, itemsResponse] = await Promise.all([
-        fetch(`${config.API_BASE_URL}/bids/detail?pncp_id=${encodeURIComponent(realPncpId)}`),
-        fetch(`${config.API_BASE_URL}/bids/items?pncp_id=${encodeURIComponent(realPncpId)}`)
-      ]);
-
-      const detailsData = await detailsResponse.json();
-      const itemsData = await itemsResponse.json();
-
-      if (detailsResponse.ok && detailsData.success) {
-        // Se conseguiu buscar detalhes completos, atualizar com dados da API
-        const licitacaoCompleta = {
-          ...detailsData.data,
-          itens: itemsData.success ? itemsData.data : []
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        console.log('🔍 [MatchesPage] Dados completos da API:', data.data);
+        console.log('🏢 [MatchesPage] Campos de órgão recebidos:');
+        console.log('  razao_social:', data.data.razao_social);
+        console.log('  nome_unidade:', data.data.nome_unidade);
+        console.log('  municipio_nome:', data.data.municipio_nome);
+        console.log('  uf_nome:', data.data.uf_nome);
+        setSelectedLicitacao(data.data);
+      } else {
+        // Fallback para objeto básico se API falhar
+        console.warn('⚠️ [MatchesPage] API falhou, usando dados básicos do match');
+        const licitacaoBasica: Licitacao = {
+          id: match.licitacao_id,
+          pncp_id: pncp_id,
+          objeto_compra: match.licitacao_objeto,
+          uf: match.licitacao_uf || '',
+          data_abertura_proposta: null,
+          data_encerramento_proposta: null,
+          valor_total_estimado: parseFloat(match.licitacao_valor) || 0,
+          status: match.licitacao_status || 'Ativa',
+          data_publicacao: match.licitacao_data_publicacao,
+          modalidade_nome: match.licitacao_modalidade || '',
+          situacao_compra_nome: '',
+          processo: '',
+          orgao_entidade: null,
+          unidade_orgao: null,
+          informacao_complementar: 'Dados básicos da licitação obtidos através do match.',
+          itens: [],
+          razao_social: 'Não informado',
+          nome_unidade: 'Não informado',
+          municipio_nome: 'Não informado',
+          uf_nome: 'Não informado'
         };
-        setSelectedLicitacao(licitacaoCompleta);
+        setSelectedLicitacao(licitacaoBasica);
       }
-      // Se não conseguiu buscar da API, mantém os dados básicos que já foram definidos
-    } catch (err) {
-      // Em caso de erro, mantém os dados básicos que já foram definidos
-      console.error('Erro ao buscar detalhes completos:', err);
+    } catch (error) {
+      console.error('❌ [MatchesPage] Erro ao buscar detalhes:', error);
+      // Em caso de erro, usar dados básicos do match
+      const pncp_id = match.licitacao_pncp_id || match.licitacao_id;
+      const licitacaoBasica: Licitacao = {
+        id: match.licitacao_id,
+        pncp_id: pncp_id,
+        objeto_compra: match.licitacao_objeto,
+        uf: match.licitacao_uf || '',
+        data_abertura_proposta: null,
+        data_encerramento_proposta: null,
+        valor_total_estimado: parseFloat(match.licitacao_valor) || 0,
+        status: match.licitacao_status || 'Ativa',
+        data_publicacao: match.licitacao_data_publicacao,
+        modalidade_nome: match.licitacao_modalidade || '',
+        situacao_compra_nome: '',
+        processo: '',
+        orgao_entidade: null,
+        unidade_orgao: null,
+        informacao_complementar: 'Dados básicos da licitação obtidos através do match.',
+        itens: [],
+        razao_social: 'Não informado',
+        nome_unidade: 'Não informado',
+        municipio_nome: 'Não informado',
+        uf_nome: 'Não informado'
+      };
+      setSelectedLicitacao(licitacaoBasica);
     } finally {
       setModalLoading(false);
     }
@@ -483,31 +282,8 @@ const MatchesPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Notificação */}
-      {notification.visible && (
-        <div className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg transition-all duration-300 transform ${
-          notification.visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
-        } ${
-          notification.type === 'success' ? 'bg-green-500 text-white' :
-          notification.type === 'error' ? 'bg-red-500 text-white' :
-          'bg-blue-500 text-white'
-        }`}>
-          <div className="flex items-center gap-3">
-            {notification.type === 'success' && <CheckCircle className="h-5 w-5" />}
-            {notification.type === 'error' && <AlertCircle className="h-5 w-5" />}
-            {notification.type === 'info' && <Clock className="h-5 w-5" />}
-            <p className="text-sm font-medium">{notification.message}</p>
-            <button
-              onClick={() => setNotification(prev => ({ ...prev, visible: false }))}
-              className="ml-auto text-white hover:text-gray-200"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      return (
+      <div className="min-h-screen bg-gray-50">`
 
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
@@ -540,103 +316,16 @@ const MatchesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* Botões de Ação */}
-              <div className="flex gap-3">
-                {/* Botão Buscar Novas Licitações */}
-                <button
-                  onClick={handleSearchNewBids}
-                  disabled={searchingNewBids || reevaluatingBids}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    searchingNewBids
-                      ? 'bg-blue-100 text-blue-600 cursor-not-allowed'
-                      : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg transform hover:scale-105'
-                  } ${reevaluatingBids ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title="Buscar novas licitações no PNCP e gerar matches"
-                >
-                  {searchingNewBids ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                  <span className="text-sm">
-                    {searchingNewBids ? 'Buscando...' : 'Buscar Novas'}
-                  </span>
-                </button>
-
-                {/* Botão Reavaliar Matches */}
-                <button
-                  onClick={handleReevaluateBids}
-                  disabled={reevaluatingBids || searchingNewBids}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    reevaluatingBids
-                      ? 'bg-green-100 text-green-600 cursor-not-allowed'
-                      : 'bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg transform hover:scale-105'
-                  } ${searchingNewBids ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title="Reavaliar licitações existentes e recalcular matches"
-                >
-                  {reevaluatingBids ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-green-600 border-t-transparent" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  <span className="text-sm">
-                    {reevaluatingBids ? 'Reavaliando...' : 'Reavaliar Matches'}
-                  </span>
-                </button>
-              </div>
-
-              {/* Status Score (apenas quando empresa selecionada) */}
-              {selectedEmpresa && (
-                <div className="text-right">
-                  <div className="text-sm text-gray-500">Score médio</div>
-                  <div className={`text-2xl font-bold ${getScoreColor(selectedEmpresa.score_medio)}`}>
-                    {formatarScore(selectedEmpresa.score_medio)}
-                  </div>
+            {/* Status Score (apenas quando empresa selecionada) */}
+            {selectedEmpresa && (
+              <div className="text-right">
+                <div className="text-sm text-gray-500">Score médio</div>
+                <div className={`text-2xl font-bold ${getScoreColor(selectedEmpresa.score_medio)}`}>
+                  {formatarScore(selectedEmpresa.score_medio)}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-
-          {/* Status dos Processos */}
-          {(searchingNewBids || reevaluatingBids) && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="animate-pulse">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-blue-800">
-                      {searchingNewBids ? 'Buscando novas licitações...' : 'Reavaliando matches...'}
-                    </p>
-                    <p className="text-xs text-blue-600">
-                      {searchingNewBids ? processStatus.search.message : processStatus.reevaluate.message}
-                    </p>
-                    <p className="text-xs text-blue-500 mt-1">
-                      Verificando status a cada 2 segundos...
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Botão para parar processo */}
-                <button
-                  onClick={handleStopProcess}
-                  className="px-3 py-1 text-xs bg-red-100 text-red-600 rounded-md hover:bg-red-200 transition-colors"
-                  title="Interromper processo atual"
-                >
-                  <div className="flex items-center gap-1">
-                    <X className="h-3 w-3" />
-                    Parar
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -815,6 +504,9 @@ const MatchesPage: React.FC = () => {
         onClose={() => setSelectedLicitacao(null)}
         showAnaliseButton={true}
       />
+
+      {/* Widget de Status de Processos */}
+      <ProcessStatusWidget onProcessComplete={handleProcessComplete} />
     </div>
   );
 };
