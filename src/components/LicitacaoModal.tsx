@@ -95,7 +95,9 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
   useEffect(() => {
     if (selectedLicitacao) {
       // Usar numero_controle_pncp se disponível, senão usar pncp_id
+      console.log('🔍 [LicitacaoModal] selectedLicitacao:', selectedLicitacao);
       const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
+      console.log('🔍 [LicitacaoModal] pncpId:', pncpId);
       if (pncpId) {
         fetchItens(pncpId);
       } else {
@@ -114,18 +116,17 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
     setItensError(null);
     
     try {
-      const endpoint = forceRefresh 
-        ? `${config.API_BASE_URL}/pncp/licitacao/${pncpId}/itens/refresh`
-        : `${config.API_BASE_URL}/pncp/licitacao/${pncpId}/itens`;
-      
-      const method = forceRefresh ? 'POST' : 'GET';
-      
+      // 🛠️ Novo endpoint compatível com backend Flask (/api/bids/items ou /api/bids/<id>/items)
+      // Preferir a rota query-string pois é independente de método (GET)
+      const endpoint = `${config.API_BASE_URL}/bids/items?pncp_id=${encodeURIComponent(pncpId)}`;
+
       const response = await fetch(endpoint, {
-        method,
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...authHeaders.getHeaders()
-        }
+        },
+        body: JSON.stringify(selectedLicitacao)
       });
 
       if (!response.ok) {
@@ -134,9 +135,22 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
 
       const data = await response.json();
       
-      if (data.success && data.data?.itens) {
-        setItens(data.data.itens);
-        console.log(`✅ ${data.data.itens.length} itens carregados (fonte: ${data.data.fonte})`);
+      // 🔄 Compatibilidade com respostas novas (data.itens) e antigas (lista direta em data)
+      let itensRecebidos: any[] | null = null;
+
+      if (data.success) {
+        if (Array.isArray(data.data)) {
+          // Formato antigo: data é array de itens
+          itensRecebidos = data.data;
+        } else if (data.data?.itens) {
+          // Novo formato: data.itens
+          itensRecebidos = data.data.itens;
+        }
+      }
+
+      if (itensRecebidos && itensRecebidos.length > 0) {
+        setItens(itensRecebidos);
+        console.log(`✅ ${itensRecebidos.length} itens carregados`);
       } else {
         setItens([]);
         setItensError(data.message || 'Nenhum item encontrado');

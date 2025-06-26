@@ -39,7 +39,7 @@ const menuItems: MenuItem[] = [
     id: 'licitacoes',
     label: 'Licitações',
     icon: FileText,
-    description: 'Gerenciar licitações'
+    description: 'Buscar licitações'
   },
   {
     id: 'matches',
@@ -155,12 +155,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange }) => {
                   className="w-full h-full object-contain p-1"
                 />
               </div>
-              {isExpanded && (
-                <div className="flex flex-col">
-                  <h1 className="text-lg font-bold text-gray-900">Alicit</h1>
-                  <p className="text-xs text-gray-500">Gestão Inteligente</p>
-                </div>
-              )}
+              
             </div>
 
             {/* Botão de minimizar (apenas desktop) */}

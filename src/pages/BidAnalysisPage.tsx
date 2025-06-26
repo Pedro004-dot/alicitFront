@@ -290,6 +290,21 @@ const BidAnalysisPage: React.FC = () => {
     }
   };
 
+  // 🆕 FUNÇÃO para renderizar markdown básico (negrito)
+  const renderMarkdown = (text: string) => {
+    // Dividir o texto em partes e processar **texto** para negrito
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        // Remover os ** e aplicar negrito
+        const boldText = part.slice(2, -2);
+        return <strong key={index}>{boldText}</strong>;
+      }
+      return part;
+    });
+  };
+
   // 🆕 FUNÇÃO para preparação automática
   const startAutomaticPreparation = async () => {
     if (!currentLicitacaoId || !pncp_id) {
@@ -605,6 +620,7 @@ const BidAnalysisPage: React.FC = () => {
                 onClick={() => window.history.back()}
                 className="w-full flex items-center gap-3 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors text-left"
               >
+                
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
@@ -1000,7 +1016,7 @@ const BidAnalysisPage: React.FC = () => {
                         <span className="text-sm">Analisando documentos...</span>
                       </div>
                     ) : (
-                      <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+                      <div className="whitespace-pre-wrap text-sm">{renderMarkdown(message.content)}</div>
                     )}
                     <div className={`text-xs mt-2 text-right ${
                       message.type === 'user' ? 'text-orange-100' : 'text-gray-500'

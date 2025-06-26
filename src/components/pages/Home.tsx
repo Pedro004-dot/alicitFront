@@ -122,7 +122,7 @@ const HomePage: React.FC<HomePageProps> = ({
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <h4 className="font-medium text-gray-900 mb-2">📋 Gerenciar Licitações</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Buscar Licitações</h4>
             <p className="text-gray-600 text-sm mb-3">
               Visualize e gerencie todas as licitações disponíveis na plataforma
             </p>

@@ -26,7 +26,7 @@ const Navbar: React.FC<NavbarProps> = ({
       id: 'bids' as const,
       label: 'Licitações',
       icon: '📋',
-      description: 'Gerenciar licitações',
+      description: 'Buscar licitações',
       badge: bidsCount
     },
     {
