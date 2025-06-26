@@ -885,9 +885,9 @@ const BidAnalysisPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
                   >
                     <option value="">Selecione um documento...</option>
-                    {documents.map((doc) => (
+                    {documents.filter(doc => doc?.url).map((doc) => (
                       <option key={doc.url} value={doc.url}>
-                        {doc.name} ({doc.type.toUpperCase()})
+                        {doc.name} ({(doc.type?.toUpperCase() ?? 'N/A')})
                         {doc.size && ` - ${(doc.size / 1024 / 1024).toFixed(1)} MB`}
                       </option>
                     ))}
@@ -930,7 +930,7 @@ const BidAnalysisPage: React.FC = () => {
                     <FileText className="w-16 h-16 text-gray-400 mb-4" />
                     <p className="text-lg font-medium text-gray-700 mb-2">{activeDoc.name}</p>
                     <p className="text-sm text-gray-500 mb-4">
-                      Tipo: {activeDoc.type.toUpperCase()}
+                      Tipo: {(activeDoc.type?.toUpperCase() ?? 'DESCONHECIDO')}
                       {activeDoc.size && ` • ${(activeDoc.size / 1024 / 1024).toFixed(1)} MB`}
                     </p>
                     <a 
