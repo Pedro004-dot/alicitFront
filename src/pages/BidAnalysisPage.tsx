@@ -102,6 +102,89 @@ const BidAnalysisPage: React.FC = () => {
     setError(null);
     
     try {
+      // 🆕 PRIMEIRA TENTATIVA: Usar nova API unificada para buscar detalhes
+      try {
+        console.log('🔍 [BidAnalysisPage] Tentando busca via API unificada para pncp_id:', pncp_id);
+        
+        // Construir URL da busca unificada com o PNCP ID específico
+        const searchParams = new URLSearchParams();
+        searchParams.append('keywords', pncp_id); // Usar o PNCP ID como keyword para busca exata
+        searchParams.append('page_size', '1');
+
+        const unifiedUrl = `${config.API_BASE_URL}/search/unified?${searchParams.toString()}`;
+        console.log('🔍 [BidAnalysisPage] URL da busca unificada:', unifiedUrl);
+
+        const unifiedResponse = await fetch(unifiedUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        if (unifiedResponse.ok) {
+          const unifiedData = await unifiedResponse.json();
+          
+          if (unifiedData.success && unifiedData.data?.opportunities?.length > 0) {
+            // Encontrar a oportunidade correspondente pelo PNCP ID
+            const matchingOpportunity = unifiedData.data.opportunities.find(
+              (opp: any) => opp.external_id === pncp_id || opp.id === pncp_id
+            );
+            
+            if (matchingOpportunity) {
+              console.log('✅ [BidAnalysisPage] Detalhes encontrados via API unificada');
+              
+              // Mapear dados da API unificada para o formato esperado
+              const bidDetailFromUnified = {
+                id: matchingOpportunity.opportunity_id,
+                pncp_id: matchingOpportunity.opportunity_id,
+                licitacao_id: matchingOpportunity.opportunity_id,
+                numero_controle_pncp: matchingOpportunity.opportunity_id,
+                objeto_compra: matchingOpportunity.title,
+                modalidade_nome: matchingOpportunity.bid_type || 'Não informado',
+                modalidade_compra: matchingOpportunity.bid_type || 'Não informado',  // 🔧 FIX: Adicionar campo obrigatório
+                situacao_compra_nome: matchingOpportunity.status || 'Não informado',
+                data_publicacao: matchingOpportunity.publication_date,
+                data_abertura_proposta: matchingOpportunity.opportunity_start_date,
+                data_encerramento_proposta: matchingOpportunity.opportunity_end_date,
+                valor_total_estimado: matchingOpportunity.estimated_value,
+                uf: matchingOpportunity.region_code,
+                orgao_cnpj: matchingOpportunity.provider_specific_data?.orgao_cnpj || '',
+                razao_social: matchingOpportunity.provider_specific_data?.razao_social || 'Não informado',
+                ano_compra: new Date(matchingOpportunity.publication_date || '').getFullYear() || new Date().getFullYear(),
+                sequencial_compra: parseInt(matchingOpportunity.provider_specific_data?.sequencial_compra) || 1,
+                
+                // Outros campos
+                processo: matchingOpportunity.provider_specific_data?.processo || '',
+                informacao_complementar: matchingOpportunity.description,
+                status: matchingOpportunity.is_proposal_open ? 'Ativa' : 'Fechada',
+                
+                // Campos específicos do novo sistema
+                provider_name: matchingOpportunity.provider_name || 'pncp',
+                source: 'unified_search'
+              };
+              
+              setBidDetail(bidDetailFromUnified);
+              
+              // Extrair licitacao_id para documentos
+              const uuid = bidDetailFromUnified.licitacao_id || bidDetailFromUnified.id;
+              if (uuid && !currentLicitacaoId) {
+                console.log('🔄 [BidAnalysisPage] Licitacao_id obtido da API unificada:', uuid);
+                setCurrentLicitacaoId(uuid);
+              }
+              
+              return; // Sucesso, sair da função
+            }
+          }
+        }
+        
+        console.warn('⚠️ [BidAnalysisPage] API unificada não encontrou correspondência, tentando API antiga');
+      } catch (unifiedError) {
+        console.warn('⚠️ [BidAnalysisPage] Erro na API unificada, tentando API antiga:', unifiedError);
+      }
+      
+      // 🔄 FALLBACK: Usar API antiga se a unificada falhar
+      console.log('🔍 [BidAnalysisPage] Tentando busca via API antiga');
+      
       const response = await fetch(`${config.API_BASE_URL}/bids/detail?pncp_id=${encodeURIComponent(pncp_id)}`);
       if (!response.ok) {
         throw new Error('Falha ao carregar detalhes da licitação');
@@ -109,8 +192,8 @@ const BidAnalysisPage: React.FC = () => {
       const data = await response.json();
       setBidDetail(data.data);
       
-      // 🎯 CORREÇÃO: Debug completo e usar o UUID correto
-      console.log('📋 Debug bidDetail completo:', data.data);
+      // 🎯 Debug e extrair UUID correto
+      console.log('✅ [BidAnalysisPage] Dados da API antiga:', data.data);
       console.log('🔍 currentLicitacaoId atual:', currentLicitacaoId);
       console.log('🔍 data.data.id:', data.data?.id);
       console.log('🔍 data.data.licitacao_id:', data.data?.licitacao_id);
@@ -120,13 +203,14 @@ const BidAnalysisPage: React.FC = () => {
         // Tentar diferentes campos que podem conter o UUID
         const uuid = data.data?.licitacao_id || data.data?.id;
         if (uuid) {
-          console.log('🔄 Licitacao_id obtido do detalhe:', uuid);
+          console.log('🔄 [BidAnalysisPage] Licitacao_id obtido da API antiga:', uuid);
           setCurrentLicitacaoId(uuid);
         } else {
           console.error('❌ Nenhum licitacao_id encontrado no bidDetail');
         }
       }
     } catch (err) {
+      console.error('❌ [BidAnalysisPage] Erro ao buscar detalhes:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
       setLoading(false);

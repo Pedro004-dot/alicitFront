@@ -83,7 +83,7 @@ const SearchPage: React.FC = () => {
     }));
   }, [filters.estados]);
 
-  // Função de busca usando a nova API
+  // Função de busca usando a nova API unificada
   const handleSearch = async () => {
     if (!keywords.trim()) {
       setError('Digite palavras-chave para buscar');
@@ -94,11 +94,140 @@ const SearchPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // ✅ CORREÇÃO: Construir um objeto para o body da requisição
+      // 🆕 NOVA IMPLEMENTAÇÃO: Usar rota unificada /api/search/unified
+      console.log('🔍 Usando nova rota unificada para busca');
+
+      // Construir parâmetros da query string para a nova API
+      const searchParams = new URLSearchParams();
+      
+      // Adicionar keywords
+      searchParams.append('keywords', keywords.trim());
+      
+      // Adicionar filtros se existirem
+      if (filters.estados.length > 0) {
+        // Para múltiplos estados, usar o primeiro (ou você pode adaptar a API para aceitar múltiplos)
+        searchParams.append('region_code', filters.estados[0]);
+      }
+      
+      if (filters.valor_minimo !== undefined && filters.valor_minimo > 0) {
+        searchParams.append('min_value', filters.valor_minimo.toString());
+      }
+      
+      if (filters.valor_maximo !== undefined && filters.valor_maximo > 0) {
+        searchParams.append('max_value', filters.valor_maximo.toString());
+      }
+
+      // Paginação (usando valores padrão adequados)
+      searchParams.append('page', '1');
+      searchParams.append('page_size', '50');
+      searchParams.append('sort_order', 'desc');
+
+      const unifiedUrl = `${config.API_BASE_URL}/search/unified?${searchParams.toString()}`;
+      console.log('🔍 URL da busca unificada:', unifiedUrl);
+
+      const response = await fetch(unifiedUrl, {
+        method: 'GET',
+        headers: {
+          ...getHeaders(), // Manter headers de autenticação
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const data = await response.json();
+      console.log('🔍 Resposta da API unificada:', data);
+
+      if (response.ok && data.success) {
+        const unifiedData = data.data;
+        const opportunities = unifiedData.opportunities || [];
+        
+        console.log('📋 Oportunidades encontradas:', opportunities);
+        
+        // Mapear os resultados da API unificada para o formato esperado pelo frontend
+        const licitacoesFormatadas = opportunities.map((opportunity: any) => ({
+          // IDs e identificadores
+          id: opportunity.external_id || opportunity.id,
+          pncp_id: opportunity.external_id,
+          numero_controle_pncp: opportunity.external_id,
+          
+          // Campos principais
+          objeto_compra: opportunity.title || opportunity.objeto_compra,
+          modalidade_nome: opportunity.provider_specific_data?.modalidadeNome || 'Pregão Eletrônico',
+          situacao_compra_nome: opportunity.provider_specific_data?.situacaoCompraNome || 'Aberta',
+          
+          // Datas
+          data_publicacao: opportunity.publication_date,
+          data_publicacao_pncp: opportunity.publication_date,
+          data_abertura_proposta: opportunity.provider_specific_data?.dataAberturaProposta,
+          data_encerramento_proposta: opportunity.submission_deadline,
+          
+          // Valor
+          valor_total_estimado: opportunity.estimated_value,
+          valor_display: opportunity.estimated_value,
+          
+          // Localização
+          uf: opportunity.region_code,
+          uf_nome: opportunity.provider_specific_data?.ufNome || opportunity.region_code,
+          municipio_nome: opportunity.municipality,
+          
+          // Órgão/entidade
+          razao_social: opportunity.procuring_entity_name,
+          nome_unidade: opportunity.provider_specific_data?.nomeUnidade || opportunity.procuring_entity_name,
+          orgao_entidade: {
+            razaoSocial: opportunity.procuring_entity_name,
+            cnpj: opportunity.procuring_entity_id
+          },
+          unidade_orgao: {
+            nomeUnidade: opportunity.provider_specific_data?.nomeUnidade || opportunity.procuring_entity_name,
+            municipioNome: opportunity.municipality,
+            ufSigla: opportunity.region_code,
+            ufNome: opportunity.provider_specific_data?.ufNome || opportunity.region_code
+          },
+          
+          // Outros campos
+          processo: opportunity.provider_specific_data?.processo || '',
+          informacao_complementar: opportunity.description,
+          link_sistema_origem: opportunity.provider_specific_data?.linkSistemaOrigem,
+          
+          // Campos específicos do novo sistema
+          provider_name: opportunity.provider_name || 'pncp',
+          source: opportunity.provider_name || 'pncp',
+          source_label: opportunity.provider_name?.toUpperCase() || 'PNCP',
+          
+          // Status calculado
+          status_calculado: opportunity.is_proposal_open ? 'Ativa' : 'Fechada',
+          is_proposal_open: opportunity.is_proposal_open
+        }));
+        
+        console.log('📋 DADOS FORMATADOS PARA FRONTEND:', licitacoesFormatadas);
+        setResults(licitacoesFormatadas);
+        
+        // Log dos resultados para debug
+        console.log(`📊 Resultados: ${unifiedData.total} licitações encontradas via busca unificada`);
+        console.log(`🔍 Provedores utilizados: ${Object.keys(data.data.filters_applied || {}).join(', ')}`);
+        
+      } else {
+        // Fallback para API antiga em caso de erro
+        console.warn('⚠️ API unificada falhou, tentando fallback para API antiga');
+        await handleSearchFallback();
+      }
+    } catch (err) {
+      console.error('❌ Erro na busca unificada:', err);
+      console.warn('🔄 Tentando fallback para API antiga');
+      await handleSearchFallback();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Função de fallback para a API antiga (mantém compatibilidade)
+  const handleSearchFallback = async () => {
+    try {
+      console.log('🔄 Executando busca com API antiga como fallback');
+      
       const requestBody: any = {
         palavra_chave: keywords,
-        usar_sinonimos: true,           // ✅ Adicionado valor padrão
-        threshold_relevancia: 0.2,      // ✅ Adicionado valor padrão
+        usar_sinonimos: true,
+        threshold_relevancia: 0.2,
         pagina: 1,
         itens_por_pagina: 50,
       };
@@ -124,31 +253,26 @@ const SearchPage: React.FC = () => {
         requestBody.valor_maximo = filters.valor_maximo;
       }
 
-      console.log('🔍 Buscando com corpo da requisição:', requestBody);
-
-      // ✅ CORREÇÃO: Enviar dados no body e remover da URL
       const response = await fetch(`${config.API_BASE_URL}/licitacoes/buscar`, {
         method: 'POST',
         headers: {
-          ...getHeaders(), // Manter headers de autenticação
-          'Content-Type': 'application/json', // ✅ Adicionado Content-Type
+          ...getHeaders(),
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody) // ✅ Enviar dados no body
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // 🔄 Compatibilidade: aceitar formatos antigos e novos
+        // Processar resposta da API antiga (código original)
         let metadados: any;
         let licitacoesRaw: any[];
 
         if (data.data?.metadados) {
-          // Formato antigo: data.metadados + data.data
           metadados = data.data.metadados;
           licitacoesRaw = data.data.data || [];
         } else if (data.data && data.data.total !== undefined) {
-          // Novo formato: total / licitacoes / etc.
           metadados = {
             totalRegistros: data.data.total,
             totalPaginas: data.data.total_paginas || 1,
@@ -157,39 +281,31 @@ const SearchPage: React.FC = () => {
           };
           licitacoesRaw = data.data.licitacoes || [];
         } else {
-          setError('Formato de resposta inesperado');
+          setError('Formato de resposta inesperado na API antiga');
           return;
         }
-
-        console.log('✅ Busca concluída:', metadados);
-        console.log('🔍 DADOS BRUTOS DA API:', licitacoesRaw);
         
-        // Mapear os resultados para o formato esperado
+        // Mapear os resultados para o formato esperado (código original)
         const licitacoesFormatadas = licitacoesRaw.map((lic: any) => ({
           ...lic,
           id: lic.numeroControlePNCP || lic.id,
           pncp_id: lic.numeroControlePNCP,
           numero_controle_pncp: lic.numeroControlePNCP,
           
-          // Mapeamento dos campos principais
           objeto_compra: lic.objetoCompra || lic.objeto_compra,
           modalidade_nome: lic.modalidadeNome || lic.modalidade_nome,
           situacao_compra_nome: lic.situacaoCompraNome || lic.situacao_compra_nome,
           
-          // Mapeamento de datas
           data_publicacao_pncp: lic.dataPublicacaoPncp || lic.data_publicacao_pncp,
           data_publicacao: lic.dataPublicacaoPncp || lic.data_publicacao,
           data_abertura_proposta: lic.dataAberturaProposta || lic.data_abertura_proposta,
           data_encerramento_proposta: lic.dataEncerramentoProposta || lic.data_encerramento_proposta,
           
-          // Mapeamento de valor
           valor_total_estimado: lic.valorTotalEstimado || lic.valor_total_estimado,
           
-          // Mapeamento de órgão/unidade
           orgao_entidade: lic.orgaoEntidade || lic.orgao_entidade,
           unidade_orgao: lic.unidadeOrgao || lic.unidade_orgao,
           
-          // Campos derivados do órgão/unidade
           razao_social: lic.orgaoEntidade?.razaoSocial || lic.razao_social,
           nome_unidade: lic.unidadeOrgao?.nomeUnidade || lic.nome_unidade,
           municipio_nome: lic.unidadeOrgao?.municipioNome || lic.municipio_nome,
@@ -197,34 +313,23 @@ const SearchPage: React.FC = () => {
           uf_nome: lic.unidadeOrgao?.ufNome || lic.uf_nome,
           codigo_ibge: lic.unidadeOrgao?.codigoIbge || lic.codigo_ibge,
           
-          // Outros campos
           processo: lic.processo,
           informacao_complementar: lic.informacaoComplementar || lic.informacao_complementar,
           link_sistema_origem: lic.linkSistemaOrigem || lic.link_sistema_origem,
           
-          // Campos adicionais
           source: 'pncp',
-          source_label: 'PNCP'
+          source_label: 'PNCP (Fallback)'
         }));
         
-        console.log('📋 DADOS FORMATADOS:', licitacoesFormatadas);
         setResults(licitacoesFormatadas);
-        
-        // Log dos resultados para debug
-        console.log(`📊 Resultados: ${metadados.totalRegistros} licitações encontradas`);
-        
-        if (metadados.estrategia_busca?.ativa) {
-          console.log(`🔍 Busca inteligente ativa: ${metadados.estrategia_busca.paginas_buscadas} páginas`);
-        }
+        console.log(`📊 Fallback concluído: ${metadados.totalRegistros} licitações encontradas`);
         
       } else {
-        setError(data.message || 'Erro na busca');
+        setError(data.message || 'Erro na busca (fallback)');
       }
-    } catch (err) {
-      console.error('❌ Erro na busca:', err);
-      setError('Erro ao conectar com a API');
-    } finally {
-      setLoading(false);
+    } catch (fallbackErr) {
+      console.error('❌ Erro também no fallback:', fallbackErr);
+      setError('Erro ao conectar com a API (todas as tentativas falharam)');
     }
   };
 

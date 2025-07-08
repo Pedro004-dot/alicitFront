@@ -97,6 +97,94 @@ const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_i
     setError(null);
     
     try {
+      // 🆕 PRIMEIRA TENTATIVA: Usar nova API unificada para buscar detalhes
+      try {
+        console.log('🔍 [BidDetailModal] Tentando busca via API unificada para pncp_id:', pncp_id);
+        
+        // Construir URL da busca unificada com o PNCP ID específico
+        const searchParams = new URLSearchParams();
+        searchParams.append('keywords', pncp_id); // Usar o PNCP ID como keyword para busca exata
+        searchParams.append('page_size', '1');
+
+        const unifiedUrl = `${config.API_BASE_URL}/search/unified?${searchParams.toString()}`;
+        console.log('🔍 [BidDetailModal] URL da busca unificada:', unifiedUrl);
+
+        const unifiedResponse = await fetch(unifiedUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        if (unifiedResponse.ok) {
+          const unifiedData = await unifiedResponse.json();
+          
+          if (unifiedData.success && unifiedData.data?.opportunities?.length > 0) {
+            // Encontrar a oportunidade correspondente pelo PNCP ID
+            const matchingOpportunity = unifiedData.data.opportunities.find(
+              (opp: any) => opp.external_id === pncp_id || opp.id === pncp_id
+            );
+            
+            if (matchingOpportunity) {
+              console.log('✅ [BidDetailModal] Detalhes encontrados via API unificada');
+              
+              // Mapear dados da API unificada para o formato esperado
+              const bidDetailFromUnified = {
+                id: matchingOpportunity.opportunity_id,
+                pncp_id: matchingOpportunity.opportunity_id,
+                licitacao_id: matchingOpportunity.opportunity_id,
+                numero_controle_pncp: matchingOpportunity.opportunity_id,
+                objeto_compra: matchingOpportunity.title,
+                modalidade_nome: matchingOpportunity.bid_type || 'Não informado',
+                modalidade_compra: matchingOpportunity.bid_type || 'Não informado',  // 🔧 FIX: Adicionar campo obrigatório
+                situacao_compra_nome: matchingOpportunity.status || 'Não informado',
+                data_publicacao: matchingOpportunity.publication_date,
+                data_abertura_proposta: matchingOpportunity.opportunity_start_date,
+                data_encerramento_proposta: matchingOpportunity.opportunity_end_date,
+                valor_total_estimado: matchingOpportunity.estimated_value,
+                uf: matchingOpportunity.region_code,
+                orgao_cnpj: matchingOpportunity.provider_specific_data?.orgao_cnpj || '',
+                razao_social: matchingOpportunity.provider_specific_data?.razao_social || 'Não informado',
+                ano_compra: new Date(matchingOpportunity.publication_date || '').getFullYear() || new Date().getFullYear(),
+                sequencial_compra: parseInt(matchingOpportunity.provider_specific_data?.sequencial_compra) || 1,
+                
+                // Outros campos
+                processo: matchingOpportunity.provider_specific_data?.processo || '',
+                informacao_complementar: matchingOpportunity.description,
+                status: matchingOpportunity.is_proposal_open ? 'Ativa' : 'Fechada',
+                
+                // Campos específicos do novo sistema
+                provider_name: matchingOpportunity.provider_name || 'pncp',
+                source: 'unified_search'
+              } as BidDetail;
+              
+              setBidDetail(bidDetailFromUnified);
+              
+              // Tentar buscar itens usando o PNCP ID
+              try {
+                const itemsResponse = await fetch(`${config.API_BASE_URL}/bids/items?pncp_id=${encodeURIComponent(pncp_id)}`);
+                if (itemsResponse.ok) {
+                  const itemsData = await itemsResponse.json();
+                  setBidItems(itemsData.data || []);
+                }
+              } catch (itemsError) {
+                console.warn('⚠️ [BidDetailModal] Erro ao buscar itens:', itemsError);
+                setBidItems([]);
+              }
+              
+              return; // Sucesso, sair da função
+            }
+          }
+        }
+        
+        console.warn('⚠️ [BidDetailModal] API unificada não encontrou correspondência, tentando API antiga');
+      } catch (unifiedError) {
+        console.warn('⚠️ [BidDetailModal] Erro na API unificada, tentando API antiga:', unifiedError);
+      }
+      
+      // 🔄 FALLBACK: Usar API antiga se a unificada falhar
+      console.log('🔍 [BidDetailModal] Tentando busca via API antiga');
+      
       // Usar query parameter ao invés de path parameter para evitar problemas com "/" no pncp_id
       const response = await fetch(`${config.API_BASE_URL}/bids/detail?pncp_id=${encodeURIComponent(pncp_id)}`);
       if (!response.ok) {
@@ -112,6 +200,7 @@ const BidDetailModal: React.FC<BidDetailModalProps> = ({ isOpen, onClose, pncp_i
         setBidItems(itemsData.data || []); // Note que a resposta vem em data.data
       }
     } catch (err) {
+      console.error('❌ [BidDetailModal] Erro ao buscar detalhes:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
       setLoading(false);

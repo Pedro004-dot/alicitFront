@@ -69,7 +69,7 @@ export interface BidDetail {
   data_publicacao?: string;
   valor_total_estimado?: number;
   uf?: string;
-  modalidade_compra?: string;
+  modalidade_compra?: string;  // 🔧 FIX: Tornar opcional para compatibilidade
   status?: string;
   
   // Campos detalhados adicionados
