@@ -54,6 +54,7 @@ export interface Bid {
 export interface BidDetail {
   id: string;
   pncp_id: string;
+  licitacao_id?: string;  // 🔧 FIX: UUID para buscar documentos e análises
   orgao_cnpj?: string;  // Tornando opcional para compatibilidade
   razao_social?: string;  // Nova razão social do órgão licitante
   // Novos campos da unidadeOrgao
@@ -147,6 +148,10 @@ export interface BidDetail {
   
   // Itens relacionados (quando incluídos)
   itens?: BidItem[];
+  
+  // Campos específicos do sistema unificado
+  provider_name?: string;  // 🔧 FIX: Nome do provedor de dados ('pncp', etc.)
+  source?: string;  // 🔧 FIX: Fonte dos dados ('unified_search', 'legacy', etc.)
 }
 
 // Interface para itens da licitação

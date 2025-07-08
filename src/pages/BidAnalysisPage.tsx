@@ -161,12 +161,12 @@ const BidAnalysisPage: React.FC = () => {
                 // Campos específicos do novo sistema
                 provider_name: matchingOpportunity.provider_name || 'pncp',
                 source: 'unified_search'
-              };
+              } as BidDetail;
               
               setBidDetail(bidDetailFromUnified);
               
-              // Extrair licitacao_id para documentos
-              const uuid = bidDetailFromUnified.licitacao_id || bidDetailFromUnified.id;
+              // Extrair licitacao_id para documentos  
+              const uuid = bidDetailFromUnified.id; // Usar apenas id temporariamente
               if (uuid && !currentLicitacaoId) {
                 console.log('🔄 [BidAnalysisPage] Licitacao_id obtido da API unificada:', uuid);
                 setCurrentLicitacaoId(uuid);
