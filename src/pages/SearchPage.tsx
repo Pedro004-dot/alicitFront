@@ -18,6 +18,7 @@ interface FilterOptions {
 interface ExtendedLicitacao extends Licitacao {
   source?: 'local' | 'pncp';
   source_label?: string;
+  provider_name?: string; // 🆕 identifica o provider (pncp | comprasnet)
 }
 
 interface OptionType {
@@ -704,6 +705,9 @@ const SearchPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {results.map((licitacao) => {
+            // 🐞 DEBUG: Log para verificar provider_name
+            console.log(`🔍 Licitação ID: ${licitacao.id}, Provider: ${licitacao.provider_name}`, licitacao);
+            
             const status = getStatusLicitacao(licitacao);
             const isAtiva = status === 'Ativa';
             
@@ -726,9 +730,13 @@ const SearchPage: React.FC = () => {
                       >
                         {status}
                       </span>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                        PNCP
-                        </span>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                        licitacao.provider_name === 'comprasnet' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {licitacao.provider_name === 'comprasnet' ? 'COMPRASNET' : 'PNCP'}
+                      </span>
                     </div>
                     <Eye className="h-5 w-5 text-gray-400" />
                   </div>
