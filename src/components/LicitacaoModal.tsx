@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Package, Loader2, RefreshCw } from 'lucide-react';
 import { Licitacao } from '../types/licitacao';
@@ -101,7 +101,27 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
     return new Date(data).toLocaleDateString('pt-BR');
   };
 
-  const fetchItens = useCallback(async (forceRefresh = false) => {
+  // Buscar itens quando o modal abrir e tiver uma licitação
+  useEffect(() => {
+    if (selectedLicitacao) {
+      // Usar numero_controle_pncp se disponível, senão usar pncp_id
+      console.log('🔍 [LicitacaoModal] selectedLicitacao:', selectedLicitacao);
+      const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
+      console.log('🔍 [LicitacaoModal] pncpId:', pncpId);
+      if (pncpId) {
+        fetchItens(pncpId);
+      } else {
+        setItens([]);
+        setItensError('ID PNCP não disponível para buscar itens');
+      }
+    } else {
+      // Limpar itens quando modal fechar
+      setItens([]);
+      setItensError(null);
+    }
+  }, [selectedLicitacao]);
+
+  const fetchItens = async (pncpId: string, forceRefresh = false) => {
     setLoadingItens(true);
     setItensError(null);
 
@@ -149,26 +169,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
     } finally {
       setLoadingItens(false);
     }
-  }, [selectedLicitacao, authHeaders]);
-
-  useEffect(() => {
-    if (selectedLicitacao) {
-      // Usar numero_controle_pncp se disponível, senão usar pncp_id
-      console.log('🔍 [LicitacaoModal] selectedLicitacao:', selectedLicitacao);
-      const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
-      console.log('🔍 [LicitacaoModal] pncpId:', pncpId);
-      if (pncpId) {
-        fetchItens();
-      } else {
-        setItens([]);
-        setItensError('ID PNCP não disponível para buscar itens');
-      }
-    } else {
-      // Limpar itens quando modal fechar
-      setItens([]);
-      setItensError(null);
-    }
-  }, [selectedLicitacao, fetchItens]);
+  };
 
   if (!selectedLicitacao) return null;
 
@@ -319,7 +320,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                 <button
                   onClick={() => {
                     const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
-                    if (pncpId) fetchItens(true);
+                    if (pncpId) fetchItens(pncpId, true);
                   }}
                   disabled={loadingItens}
                   className="flex items-center space-x-1 px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
@@ -351,7 +352,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                   <button
                     onClick={() => {
                       const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
-                      if (pncpId) fetchItens();
+                      if (pncpId) fetchItens(pncpId);
                     }}
                     className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
                   >

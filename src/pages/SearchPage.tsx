@@ -336,15 +336,30 @@ const SearchPage: React.FC = () => {
     }
   };
 
-  // Função para determinar status textual
-  const getStatusLicitacaoString = (licitacao: ExtendedLicitacao) => {
-    if (licitacao.status_calculado) return licitacao.status_calculado;
-    if (!licitacao.data_encerramento_proposta) return 'Indefinido';
-    const hoje = new Date();
-    const dataEncerramentoDate = new Date(licitacao.data_encerramento_proposta);
-    const umDiaAntes = new Date(dataEncerramentoDate);
-    umDiaAntes.setDate(umDiaAntes.getDate() - 1);
-    return hoje > umDiaAntes ? 'Fechada' : 'Ativa';
+  // Função para determinar status baseado na data
+  const getStatusLicitacao = (licitacao: ExtendedLicitacao) => {
+    // Determinar a cor do badge baseado no provider
+    const providerColors = {
+      comprasnet: 'bg-green-100 text-green-800',
+      pncp: 'bg-blue-100 text-blue-800'
+    };
+    
+    // Determinar a cor do status
+    const statusColor = licitacao.is_proposal_open ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
+    
+    return (
+      <div className="flex gap-2 items-center">
+        {/* Badge do Provider */}
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${providerColors[licitacao.provider_name as keyof typeof providerColors] || providerColors.pncp}`}>
+          {licitacao.source_label}
+        </span>
+        
+        {/* Badge do Status */}
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
+          {licitacao.status_calculado}
+        </span>
+      </div>
+    );
   };
 
   // Função para formatar valor
@@ -712,8 +727,12 @@ const SearchPage: React.FC = () => {
             // 🐞 DEBUG: Log para verificar provider_name
             console.log(`🔍 Licitação ID: ${licitacao.id}, Provider: ${licitacao.provider_name}`, licitacao);
             
-            const status = getStatusLicitacaoString(licitacao);
-            const isAtiva = status === 'Ativa' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            // Usar status string para lógica de cor
+            const statusString = licitacao.status_calculado || licitacao.status || '';
+            const isAtiva = statusString === 'Ativa' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const providerColor = licitacao.provider_name === 'comprasnet'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-blue-100 text-blue-800';
             
             return (
               <div
@@ -725,17 +744,13 @@ const SearchPage: React.FC = () => {
                   {/* Status badges */}
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex gap-2">
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${isAtiva}`}
-                      >
-                        {status}
+                      {/* Badge do Provider */}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${providerColor}`}>
+                        {licitacao.source_label}
                       </span>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                        licitacao.provider_name === 'comprasnet' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {licitacao.provider_name === 'comprasnet' ? 'COMPRASNET' : 'PNCP'}
+                      {/* Badge do Status */}
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${isAtiva}`}>
+                        {statusString}
                       </span>
                     </div>
                     <Eye className="h-5 w-5 text-gray-400" />
