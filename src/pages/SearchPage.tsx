@@ -19,6 +19,8 @@ interface ExtendedLicitacao extends Licitacao {
   source?: 'local' | 'pncp';
   source_label?: string;
   provider_name?: string; // 🆕 identifica o provider (pncp | comprasnet)
+  is_proposal_open?: boolean; // 🆕 indica se a licitação está aberta para propostas
+  status_calculado?: string; // 🆕 status calculado (Ativa/Fechada)
 }
 
 interface OptionType {
@@ -155,11 +157,11 @@ const SearchPage: React.FC = () => {
           modalidade_nome: opportunity.provider_specific_data?.modalidadeNome || 'Pregão Eletrônico',
           situacao_compra_nome: opportunity.provider_specific_data?.situacaoCompraNome || 'Aberta',
           
-          // Datas
+          // Datas - 🆕 Formato atualizado para ComprasNet
           data_publicacao: opportunity.publication_date,
           data_publicacao_pncp: opportunity.publication_date,
-          data_abertura_proposta: opportunity.provider_specific_data?.dataAberturaProposta,
-          data_encerramento_proposta: opportunity.submission_deadline,
+          data_abertura_proposta: opportunity.opening_date || opportunity.provider_specific_data?.dataAberturaProposta,
+          data_encerramento_proposta: opportunity.submission_deadline || opportunity.provider_specific_data?.dataEncerramentoProposta,
           
           // Valor
           valor_total_estimado: opportunity.estimated_value,
@@ -170,15 +172,15 @@ const SearchPage: React.FC = () => {
           uf_nome: opportunity.provider_specific_data?.ufNome || opportunity.region_code,
           municipio_nome: opportunity.municipality,
           
-          // Órgão/entidade
+          // Órgão/entidade - 🆕 Formato atualizado para ComprasNet
           razao_social: opportunity.procuring_entity_name,
-          nome_unidade: opportunity.provider_specific_data?.nomeUnidade || opportunity.procuring_entity_name,
+          nome_unidade: opportunity.procuring_entity_name, // Agora usando o nome extraído corretamente
           orgao_entidade: {
             razaoSocial: opportunity.procuring_entity_name,
             cnpj: opportunity.procuring_entity_id
           },
           unidade_orgao: {
-            nomeUnidade: opportunity.provider_specific_data?.nomeUnidade || opportunity.procuring_entity_name,
+            nomeUnidade: opportunity.procuring_entity_name,
             municipioNome: opportunity.municipality,
             ufSigla: opportunity.region_code,
             ufNome: opportunity.provider_specific_data?.ufNome || opportunity.region_code
@@ -334,25 +336,15 @@ const SearchPage: React.FC = () => {
     }
   };
 
-  // Função para determinar status baseado na data
-  const getStatusLicitacao = (licitacao: ExtendedLicitacao) => {
-    if (licitacao.status_calculado) {
-      return licitacao.status_calculado;
-    }
-    
-    if (!licitacao.data_encerramento_proposta) {
-      return 'Indefinido';
-    }
-    
+  // Função para determinar status textual
+  const getStatusLicitacaoString = (licitacao: ExtendedLicitacao) => {
+    if (licitacao.status_calculado) return licitacao.status_calculado;
+    if (!licitacao.data_encerramento_proposta) return 'Indefinido';
     const hoje = new Date();
-    const dataEncerramento = licitacao.data_encerramento_proposta;
-    const dataEncerramentoDate = new Date(dataEncerramento);
-    
-    if (hoje > dataEncerramentoDate) {
-      return 'Fechada';
-    } else {
-      return 'Ativa';
-    }
+    const dataEncerramentoDate = new Date(licitacao.data_encerramento_proposta);
+    const umDiaAntes = new Date(dataEncerramentoDate);
+    umDiaAntes.setDate(umDiaAntes.getDate() - 1);
+    return hoje > umDiaAntes ? 'Fechada' : 'Ativa';
   };
 
   // Função para formatar valor
@@ -378,7 +370,19 @@ const SearchPage: React.FC = () => {
   // Função para formatar data
   const formatarData = (data: string | null) => {
     if (!data) return 'Não informado';
-    return new Date(data).toLocaleDateString('pt-BR');
+    try {
+      const date = new Date(data);
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Erro ao formatar data:', error);
+      return 'Data inválida';
+    }
   };
 
   // Abrir modal com detalhes
@@ -708,8 +712,8 @@ const SearchPage: React.FC = () => {
             // 🐞 DEBUG: Log para verificar provider_name
             console.log(`🔍 Licitação ID: ${licitacao.id}, Provider: ${licitacao.provider_name}`, licitacao);
             
-            const status = getStatusLicitacao(licitacao);
-            const isAtiva = status === 'Ativa';
+            const status = getStatusLicitacaoString(licitacao);
+            const isAtiva = status === 'Ativa' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
             
             return (
               <div
@@ -722,11 +726,7 @@ const SearchPage: React.FC = () => {
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex gap-2">
                       <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                          isAtiva
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${isAtiva}`}
                       >
                         {status}
                       </span>
@@ -757,12 +757,17 @@ const SearchPage: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Data de encerramento */}
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                      <span>
-                        Encerra: {formatarData(licitacao.data_encerramento_proposta)}
-                      </span>
+                    {/* Datas */}
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Calendar className="w-4 h-4" />
+                      <div className="flex flex-col">
+                        <span className="text-sm">
+                          Abertura: {formatarData(licitacao.data_abertura_proposta)}
+                        </span>
+                        <span className="text-sm">
+                          Encerramento: {formatarData(licitacao.data_encerramento_proposta)}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Valor */}

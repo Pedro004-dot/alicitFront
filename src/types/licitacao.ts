@@ -30,6 +30,7 @@ export interface Licitacao {
   status_calculado?: string;
   valor_display?: number | string;
   razao_social?: string;
+  procuring_entity_name?: string;
   // Novos campos da unidadeOrgao
   uf_nome?: string;
   nome_unidade?: string;

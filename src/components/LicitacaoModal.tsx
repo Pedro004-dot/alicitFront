@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Package, Loader2, RefreshCw } from 'lucide-react';
 import { Licitacao } from '../types/licitacao';
@@ -16,13 +16,23 @@ interface LicitacaoItem {
   criterio_julgamento_nome?: string;
   situacao_item?: string;
   especificacao_tecnica?: string;
+  procuring_entity_name?: string;
+  razao_social?: string;
+  municipio_nome?: string;
+  uf_nome?: string;
+  data_publicacao?: string;
+  data_abertura_proposta?: string;
+  data_encerramento_proposta?: string;
+  valor_total_estimado?: number;
+  nome?: string; // Adicionado para exibir o nome do item
+  external_id?: string; // Adicionado para detectar o provider
 }
 
 interface LicitacaoModalProps {
   selectedLicitacao: Licitacao | null;
   modalLoading: boolean;
   onClose: () => void;
-  showAnaliseButton?: boolean;
+  showAnaliseButton?: boolean
 }
 
 const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
@@ -91,7 +101,56 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
     return new Date(data).toLocaleDateString('pt-BR');
   };
 
-  // Buscar itens quando o modal abrir e tiver uma licitação
+  const fetchItens = useCallback(async (forceRefresh = false) => {
+    setLoadingItens(true);
+    setItensError(null);
+
+    try {
+      // Novo endpoint multi-provider
+      const endpoint = `${config.API_BASE_URL}/bids/items-multi`;
+      // Enviar lista de licitações (aqui, apenas uma, mas pode ser expandido)
+      const payload = { licitacoes: [selectedLicitacao] };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders.getHeaders()
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      let itensRecebidos: any[] | null = null;
+
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        // data.data é um array de objetos { licitacao, itens }
+        const resultado = data.data[0];
+        if (resultado && Array.isArray(resultado.itens)) {
+          itensRecebidos = resultado.itens;
+        }
+      }
+
+      if (itensRecebidos && itensRecebidos.length > 0) {
+        setItens(itensRecebidos);
+        console.log(`✅ ${itensRecebidos.length} itens carregados (multi-provider)`);
+      } else {
+        setItens([]);
+        setItensError(data.message || 'Nenhum item encontrado');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar itens (multi-provider):', error);
+      setItensError(error instanceof Error ? error.message : 'Erro ao carregar itens');
+      setItens([]);
+    } finally {
+      setLoadingItens(false);
+    }
+  }, [selectedLicitacao, authHeaders]);
+
   useEffect(() => {
     if (selectedLicitacao) {
       // Usar numero_controle_pncp se disponível, senão usar pncp_id
@@ -99,7 +158,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
       const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
       console.log('🔍 [LicitacaoModal] pncpId:', pncpId);
       if (pncpId) {
-        fetchItens(pncpId);
+        fetchItens();
       } else {
         setItens([]);
         setItensError('ID PNCP não disponível para buscar itens');
@@ -109,60 +168,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
       setItens([]);
       setItensError(null);
     }
-  }, [selectedLicitacao]);
-
-  const fetchItens = async (pncpId: string, forceRefresh = false) => {
-    setLoadingItens(true);
-    setItensError(null);
-    
-    try {
-      // 🛠️ Novo endpoint compatível com backend Flask (/api/bids/items ou /api/bids/<id>/items)
-      // Preferir a rota query-string pois é independente de método (GET)
-      const endpoint = `${config.API_BASE_URL}/bids/items?pncp_id=${encodeURIComponent(pncpId)}`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders.getHeaders()
-        },
-        body: JSON.stringify(selectedLicitacao)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // 🔄 Compatibilidade com respostas novas (data.itens) e antigas (lista direta em data)
-      let itensRecebidos: any[] | null = null;
-
-      if (data.success) {
-        if (Array.isArray(data.data)) {
-          // Formato antigo: data é array de itens
-          itensRecebidos = data.data;
-        } else if (data.data?.itens) {
-          // Novo formato: data.itens
-          itensRecebidos = data.data.itens;
-        }
-      }
-
-      if (itensRecebidos && itensRecebidos.length > 0) {
-        setItens(itensRecebidos);
-        console.log(`✅ ${itensRecebidos.length} itens carregados`);
-      } else {
-        setItens([]);
-        setItensError(data.message || 'Nenhum item encontrado');
-      }
-    } catch (error) {
-      console.error('❌ Erro ao buscar itens:', error);
-      setItensError(error instanceof Error ? error.message : 'Erro ao carregar itens');
-      setItens([]);
-    } finally {
-      setLoadingItens(false);
-    }
-  };
+  }, [selectedLicitacao, fetchItens]);
 
   if (!selectedLicitacao) return null;
 
@@ -209,7 +215,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Órgão Licitante</label>
                     <div className="text-sm text-gray-900 space-y-1">
-                      <p className="font-medium">{selectedLicitacao.nome_unidade || selectedLicitacao.razao_social || 'Não informado'}</p>
+                      <p className="font-medium">{selectedLicitacao.nome_unidade || selectedLicitacao.razao_social || selectedLicitacao.procuring_entity_name || 'Não informado'}</p>
                       {selectedLicitacao.municipio_nome && selectedLicitacao.uf_nome && (
                         <p className="text-xs text-gray-600">📍 {selectedLicitacao.municipio_nome} - {selectedLicitacao.uf_nome}</p>
                       )}
@@ -313,7 +319,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                 <button
                   onClick={() => {
                     const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
-                    if (pncpId) fetchItens(pncpId, true);
+                    if (pncpId) fetchItens(true);
                   }}
                   disabled={loadingItens}
                   className="flex items-center space-x-1 px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
@@ -345,7 +351,7 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                   <button
                     onClick={() => {
                       const pncpId = selectedLicitacao.numero_controle_pncp || selectedLicitacao.pncp_id;
-                      if (pncpId) fetchItens(pncpId);
+                      if (pncpId) fetchItens();
                     }}
                     className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
                   >
@@ -358,78 +364,45 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
             {/* Lista de Itens */}
             {!loadingItens && !itensError && itens.length > 0 && (
               <div className="space-y-3">
-                {(showAllItens ? itens : itens.slice(0, 5)).map((item, index) => (
-                  <div key={`item-detail-${item.numero_item || index}`} className="bg-white p-4 rounded-lg border border-gray-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
-                            Item {item.numero_item}
-                          </span>
-                          {item.material_ou_servico && (
-                            <span className={`text-xs font-medium px-2 py-1 rounded ${
-                              item.material_ou_servico === 'M' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-purple-100 text-purple-800'
-                            }`}>
-                              {item.material_ou_servico === 'M' ? 'Material' : 'Serviço'}
-                            </span>
+                {(showAllItens ? itens : itens.slice(0, 5)).map((item, index) => {
+                    // Detecta provider pelo external_id
+                    const isComprasNet = item.external_id?.startsWith('comprasnet_');
+                    if (isComprasNet) {
+                      // Para ComprasNet: nome, primeira linha da descrição, quantidade e unidade
+                      return (
+                        <div key={`item-detail-${item.numero_item || index}`} className="bg-white p-4 rounded-lg border border-gray-200">
+                          <div className="font-bold text-lg text-gray-900 mb-1">{item.nome}</div>
+                          {item.descricao && (
+                            <div className="text-gray-700 textQ-sm mb-2">
+                              {item.descricao.split('\n')[0]}
+                            </div>
                           )}
-                        </div>
-                        <h4 className="font-semibold text-gray-900 mb-1">
-                          {item.descricao}
-                        </h4>
-                        {item.especificacao_tecnica && (
-                          <p className="text-sm text-gray-600 mb-2">
-                            {item.especificacao_tecnica}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      {item.quantidade && (
-                        <div>
-                          <span className="text-gray-500">Quantidade:</span>
-                          <div className="font-medium">
-                            {item.quantidade.toLocaleString('pt-BR')} {item.unidade_medida || ''}
+                          <div className="text-gray-800 text-sm">
+                            Quantidade: <span className="font-bold">{item.quantidade}</span> {item.unidade_medida}
                           </div>
                         </div>
-                      )}
-                      
-                      {item.valor_unitario_estimado && (
-                        <div>
-                          <span className="text-gray-500">Valor Unitário:</span>
-                          <div className="font-medium text-green-600">
-                            R$ {item.valor_unitario_estimado.toLocaleString('pt-BR', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2
-                            })}
+                      );
+                    } else {
+                      // PNCP: experiência aprimorada
+                      const titulo = item.nome || (item.numero_item ? `Item ${item.numero_item}` : 'Item');
+                      return (
+                        <div key={`item-detail-${item.numero_item || index}`} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                          {/* Título do item */}
+                          <div className="font-bold text-lg text-gray-900 mb-2">{titulo}</div>
+                          {/* Descrição com quebras de linha */}
+                          {item.descricao && (
+                            <div className="text-gray-700 text-base mb-3 whitespace-pre-line" style={{lineHeight: '1.6'}}>
+                              {item.descricao}
+                            </div>
+                          )}
+                          {/* Quantidade e unidade */}
+                          <div className="text-gray-800 text-sm mt-2">
+                            <span className="font-semibold">Quantidade:</span> {item.quantidade} {item.unidade_medida}
                           </div>
                         </div>
-                      )}
-                      
-                      {item.valor_total && (
-                        <div>
-                          <span className="text-gray-500">Valor Total:</span>
-                          <div className="font-semibold text-green-700">
-                            R$ {item.valor_total.toLocaleString('pt-BR', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {item.criterio_julgamento_nome && (
-                        <div>
-                          <span className="text-gray-500">Julgamento:</span>
-                          <div className="font-medium">{item.criterio_julgamento_nome}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                      );
+                    }
+                  })}
 
                 {/* Botão para mostrar mais itens */}
                 {itens.length > 5 && (
@@ -447,17 +420,6 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
                 )}
               </div>
             )}
-
-            {/* Caso não tenha itens */}
-            {!loadingItens && !itensError && itens.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>Nenhum item encontrado para esta licitação</p>
-                <p className="text-sm mt-1">
-                  Os itens podem não estar disponíveis na API do PNCP
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -465,4 +427,4 @@ const LicitacaoModal: React.FC<LicitacaoModalProps> = ({
   );
 };
 
-export default LicitacaoModal; 
+export default LicitacaoModal;
