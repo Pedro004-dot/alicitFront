@@ -172,182 +172,51 @@ const MatchesPage: React.FC = () => {
     return tipos[type as keyof typeof tipos] || type;
   };
 
-  // Abrir modal com detalhes da licitação (seguindo padrão do SearchPage)
+  // Abrir modal com detalhes da licitação (busca direta pelo licitacao_id na nova rota RESTful)
   const abrirModal = async (match: Match) => {
-    // 🆕 ATUALIZAÇÃO: Usar nova API unificada com fallback para API antiga
     setModalLoading(true);
 
+    // Exibe modal imediatamente com dados básicos
+    const licitacaoBasica: Licitacao = {
+      id: match.licitacao_id,
+      pncp_id: match.licitacao_pncp_id || match.licitacao_id,
+      objeto_compra: match.licitacao_objeto,
+      uf: match.licitacao_uf || '',
+      data_abertura_proposta: null,
+      data_encerramento_proposta: null,
+      valor_total_estimado: parseFloat(match.licitacao_valor) || 0,
+      status: match.licitacao_status || 'Ativa',
+      data_publicacao: match.licitacao_data_publicacao,
+      modalidade_nome: match.licitacao_modalidade || '',
+      situacao_compra_nome: '',
+      processo: '',
+      orgao_entidade: null,
+      unidade_orgao: null,
+      informacao_complementar: 'Dados básicos da licitação obtidos através do match.',
+      itens: [],
+      razao_social: 'Não informado',
+      nome_unidade: 'Não informado',
+      municipio_nome: 'Não informado',
+      uf_nome: 'Não informado'
+    };
+    setSelectedLicitacao(licitacaoBasica);
+
     try {
-      const pncp_id = match.licitacao_pncp_id || match.licitacao_id;
-      console.log('🔍 [MatchesPage] Buscando detalhes para pncp_id:', pncp_id);
-      console.log('🔍 [MatchesPage] match completo:', match);
-      
-      // 🆕 PRIMEIRA TENTATIVA: Usar nova API unificada para buscar detalhes
-      try {
-        console.log('🔍 [MatchesPage] Tentando busca via API unificada');
-        
-        // Construir URL da busca unificada com keywords baseadas no objeto da licitação
-        const searchParams = new URLSearchParams();
-        searchParams.append('keywords', match.licitacao_objeto);
-        searchParams.append('page_size', '1');
-        
-        if (match.licitacao_uf) {
-          searchParams.append('region_code', match.licitacao_uf);
-        }
-
-        const unifiedUrl = `${config.API_BASE_URL}/search/unified?${searchParams.toString()}`;
-        console.log('🔍 [MatchesPage] URL da busca unificada:', unifiedUrl);
-
-        const unifiedResponse = await fetch(unifiedUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
-
-        if (unifiedResponse.ok) {
-          const unifiedData = await unifiedResponse.json();
-          
-          if (unifiedData.success && unifiedData.data?.opportunities?.length > 0) {
-            // Encontrar a oportunidade correspondente pelo PNCP ID
-            const matchingOpportunity = unifiedData.data.opportunities.find(
-              (opp: any) => opp.external_id === pncp_id || opp.id === pncp_id
-            );
-            
-            if (matchingOpportunity) {
-              console.log('✅ [MatchesPage] Detalhes encontrados via API unificada');
-              
-              // Mapear dados da API unificada para o formato esperado
-              const licitacaoDetalhada: Licitacao = {
-                id: matchingOpportunity.external_id || pncp_id,
-                pncp_id: matchingOpportunity.external_id || pncp_id,
-                numero_controle_pncp: matchingOpportunity.external_id || pncp_id,
-                
-                // Campos principais
-                objeto_compra: matchingOpportunity.title || match.licitacao_objeto,
-                modalidade_nome: matchingOpportunity.provider_specific_data?.modalidadeNome || match.licitacao_modalidade || 'Pregão Eletrônico',
-                situacao_compra_nome: matchingOpportunity.provider_specific_data?.situacaoCompraNome || 'Aberta',
-                
-                // Datas
-                data_publicacao: matchingOpportunity.publication_date || match.licitacao_data_publicacao,
-                data_abertura_proposta: matchingOpportunity.provider_specific_data?.dataAberturaProposta,
-                data_encerramento_proposta: matchingOpportunity.submission_deadline,
-                
-                // Valor
-                valor_total_estimado: matchingOpportunity.estimated_value || parseFloat(match.licitacao_valor) || 0,
-                
-                // Localização
-                uf: matchingOpportunity.region_code || match.licitacao_uf || '',
-                uf_nome: matchingOpportunity.provider_specific_data?.ufNome || match.licitacao_uf || '',
-                municipio_nome: matchingOpportunity.municipality || 'Não informado',
-                
-                // Órgão/entidade
-                razao_social: matchingOpportunity.procuring_entity_name || 'Não informado',
-                nome_unidade: matchingOpportunity.provider_specific_data?.nomeUnidade || matchingOpportunity.procuring_entity_name || 'Não informado',
-                
-                // Objetos estruturados
-                orgao_entidade: {
-                  razaoSocial: matchingOpportunity.procuring_entity_name || 'Não informado',
-                  cnpj: matchingOpportunity.procuring_entity_id || ''
-                },
-                unidade_orgao: {
-                  nomeUnidade: matchingOpportunity.provider_specific_data?.nomeUnidade || matchingOpportunity.procuring_entity_name || 'Não informado',
-                  municipioNome: matchingOpportunity.municipality || 'Não informado',
-                  ufSigla: matchingOpportunity.region_code || match.licitacao_uf || '',
-                  ufNome: matchingOpportunity.provider_specific_data?.ufNome || match.licitacao_uf || ''
-                },
-                
-                // Outros campos
-                processo: matchingOpportunity.provider_specific_data?.processo || '',
-                informacao_complementar: matchingOpportunity.description || 'Dados obtidos via busca unificada.',
-                status: matchingOpportunity.is_proposal_open ? 'Ativa' : 'Fechada',
-                itens: []
-              };
-              
-              setSelectedLicitacao(licitacaoDetalhada);
-              return; // Sucesso, sair da função
-            }
-          }
-        }
-        
-        console.warn('⚠️ [MatchesPage] API unificada não encontrou correspondência, tentando API antiga');
-      } catch (unifiedError) {
-        console.warn('⚠️ [MatchesPage] Erro na API unificada, tentando API antiga:', unifiedError);
-      }
-      
-      // 🔄 FALLBACK: Usar API antiga se a unificada falhar
-      console.log('🔍 [MatchesPage] Tentando busca via API antiga');
-      
-      const response = await fetch(`${config.API_BASE_URL}/bids/detail?pncp_id=${encodeURIComponent(pncp_id)}`);
-      
-      if (!response.ok) {
-        throw new Error('Falha ao carregar detalhes da licitação');
-      }
-      
+      // Busca detalhes completos pela nova rota RESTful
+      const response = await fetch(`${config.API_BASE_URL}/licitacoes/${match.licitacao_id}/detalhes`, {
+        headers: getHeaders(),
+      });
       const data = await response.json();
-      
-      if (data.success && data.data) {
-        console.log('✅ [MatchesPage] Dados completos da API antiga:', data.data);
-        console.log('🏢 [MatchesPage] Campos de órgão recebidos:');
-        console.log('  razao_social:', data.data.razao_social);
-        console.log('  nome_unidade:', data.data.nome_unidade);
-        console.log('  municipio_nome:', data.data.municipio_nome);
-        console.log('  uf_nome:', data.data.uf_nome);
-        setSelectedLicitacao(data.data);
+
+      if (response.ok && data.success && data.data) {
+        setSelectedLicitacao(data.data); // Objeto já vem completo, inclusive com itens
       } else {
-        // Fallback para objeto básico se todas as APIs falharem
-        console.warn('⚠️ [MatchesPage] Todas as APIs falharam, usando dados básicos do match');
-        const licitacaoBasica: Licitacao = {
-          id: match.licitacao_id,
-          pncp_id: pncp_id,
-          objeto_compra: match.licitacao_objeto,
-          uf: match.licitacao_uf || '',
-          data_abertura_proposta: null,
-          data_encerramento_proposta: null,
-          valor_total_estimado: parseFloat(match.licitacao_valor) || 0,
-          status: match.licitacao_status || 'Ativa',
-          data_publicacao: match.licitacao_data_publicacao,
-          modalidade_nome: match.licitacao_modalidade || '',
-          situacao_compra_nome: '',
-          processo: '',
-          orgao_entidade: null,
-          unidade_orgao: null,
-          informacao_complementar: 'Dados básicos da licitação obtidos através do match.',
-          itens: [],
-          razao_social: 'Não informado',
-          nome_unidade: 'Não informado',
-          municipio_nome: 'Não informado',
-          uf_nome: 'Não informado'
-        };
-        setSelectedLicitacao(licitacaoBasica);
+        setError('Licitação não encontrada. Exibindo dados básicos.');
+        // Mantém os dados básicos já setados
       }
-    } catch (error) {
-      console.error('❌ [MatchesPage] Erro ao buscar detalhes:', error);
-      // Em caso de erro total, usar dados básicos do match
-      const pncp_id = match.licitacao_pncp_id || match.licitacao_id;
-      const licitacaoBasica: Licitacao = {
-        id: match.licitacao_id,
-        pncp_id: pncp_id,
-        objeto_compra: match.licitacao_objeto,
-        uf: match.licitacao_uf || '',
-        data_abertura_proposta: null,
-        data_encerramento_proposta: null,
-        valor_total_estimado: parseFloat(match.licitacao_valor) || 0,
-        status: match.licitacao_status || 'Ativa',
-        data_publicacao: match.licitacao_data_publicacao,
-        modalidade_nome: match.licitacao_modalidade || '',
-        situacao_compra_nome: '',
-        processo: '',
-        orgao_entidade: null,
-        unidade_orgao: null,
-        informacao_complementar: 'Dados básicos da licitação obtidos através do match (modo offline).',
-        itens: [],
-        razao_social: 'Não informado',
-        nome_unidade: 'Não informado',
-        municipio_nome: 'Não informado',
-        uf_nome: 'Não informado'
-      };
-      setSelectedLicitacao(licitacaoBasica);
+    } catch (err) {
+      setError('Erro ao buscar detalhes da licitação.');
+      // Mantém os dados básicos já setados
     } finally {
       setModalLoading(false);
     }
